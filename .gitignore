@@ -1,0 +1,17 @@
+# Audio and Media outputs
+*.mp3
+*.m4a
+*.mp4
+*.jpg
+*.png
+*.webp
+temp_*
+downloads/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# OS files
+Thumbs.db
+.DS_Store
