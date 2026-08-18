@@ -3,6 +3,14 @@ import re
 import subprocess
 import sys
 import urllib.request
+from config_manager import (
+    add_to_history,
+    get_download_dir,
+    load_config,
+    resolve_audio_url,
+    save_config,
+    set_download_dir,
+)
 
 # Inisialisasi warna terminal ANSI untuk Windows / Linux / macOS
 if sys.platform == "win32":
@@ -22,8 +30,7 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
-DEFAULT_ID = "RJ01538146"
-OUTPUT_DIR = "downloads"
+DEFAULT_ID = "RJ01673437"
 
 
 def print_banner():
@@ -36,9 +43,7 @@ def parse_rj_ids(input_text):
     """Mengekstrak list ID/Kode dari input (support pemisah koma, spasi, newline)."""
     if not input_text.strip():
         return [DEFAULT_ID]
-    # Pisahkan berdasarkan koma, spasi, atau titik koma
     raw_tokens = re.split(r"[\s,;]+", input_text.strip())
-    # Bersihkan token kosong
     ids = [token.strip() for token in raw_tokens if token.strip()]
     return ids if ids else [DEFAULT_ID]
 
@@ -103,22 +108,23 @@ def cleanup_temp_files(temp_files):
 
 
 def process_single_id(rj_id, current_index, total_count):
-    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    download_dir = get_download_dir()
 
-    m3u8_url = f"https://v.weeab0o.xyz/{rj_id}.m3u8"
+    audio_url = resolve_audio_url(rj_id, REFERER, USER_AGENT)
     cover_url = f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg"
-    final_output = os.path.join(OUTPUT_DIR, f"{rj_id}.mp3")
+    final_output = os.path.join(download_dir, f"{rj_id}.mp3")
 
     progress_info = f"[{current_index}/{total_count}] " if total_count > 1 else ""
 
     print(f"\n{MAGENTA}{'-' * 51}{RESET}")
     print(f"{BOLD}{progress_info}Memproses: {CYAN}{rj_id}{RESET}")
-    print(f" URL M3U8    : {m3u8_url}")
+    print(f" URL Audio   : {audio_url}")
     print(f" URL Cover   : {cover_url}")
+    print(f" Folder Simpan : {download_dir}")
     print(f" File Output : {final_output}")
     print(f"{MAGENTA}{'-' * 51}{RESET}\n")
 
-    # Fitur 4: Cek jika file sudah ada
+    # Cek jika file sudah ada
     if os.path.exists(final_output):
         print(f"{YELLOW}[SKIP] File '{final_output}' sudah ada. Melewati proses download.{RESET}")
         return
@@ -140,13 +146,24 @@ def process_single_id(rj_id, current_index, total_count):
         download_cover(cover_url, temp_cover)
 
         print(f"{CYAN}[2/3] Mendownload stream audio (16 parallel connections)...{RESET}")
-        download_audio(m3u8_url, temp_tmpl)
+        download_audio(audio_url, temp_tmpl)
 
         if not os.path.exists(temp_audio):
             raise FileNotFoundError("File audio sementara tidak ditemukan.")
 
         print(f"{CYAN}[3/3] Menyematkan thumbnail ke metadata MP3...{RESET}")
         embed_cover(temp_audio, temp_cover, final_output)
+
+        # Catat ke history dan cache cover
+        add_to_history(
+            rjid=rj_id,
+            title=rj_id,
+            cv="-",
+            circle="-",
+            cover_url=cover_url,
+            output_path=final_output,
+            temp_cover_path=temp_cover,
+        )
 
         print(f"\n{GREEN}{BOLD}==================================================={RESET}")
         print(f"{GREEN}{BOLD}  SUKSES! File tersimpan di: {final_output}{RESET}")
@@ -159,17 +176,27 @@ def process_single_id(rj_id, current_index, total_count):
         cleanup_temp_files(temp_files)
 
 
-def main():
+def run_cli():
+    """Menjalankan antarmuka berbasis Terminal / CLI."""
     while True:
         print_banner()
+        current_dir = get_download_dir()
+        print(f"{CYAN}📁 Folder Simpan Saat Ini:{RESET} {os.path.abspath(current_dir)}\n")
 
         try:
             user_input = input(
-                f"{BOLD}Masukkan Kode/Angka RJ (Bisa beberapa dipisah spasi/koma, Enter untuk {DEFAULT_ID}): {RESET}"
+                f"{BOLD}Masukkan Kode RJ / 'dir' untuk ganti folder / Enter ({DEFAULT_ID}): {RESET}"
             ).strip()
         except (KeyboardInterrupt, EOFError):
             print(f"\n{YELLOW}Program dihentikan.{RESET}")
             break
+
+        if user_input.lower() == "dir":
+            new_path = input("Masukkan path folder baru: ").strip()
+            if new_path:
+                set_download_dir(new_path)
+                print(f"{GREEN}[OK] Folder download diperbarui ke: {new_path}{RESET}\n")
+            continue
 
         rj_ids = parse_rj_ids(user_input)
         total_count = len(rj_ids)
@@ -181,6 +208,53 @@ def main():
             process_single_id(rj_id, idx, total_count)
 
         print(f"\n{GREEN}--- Semua antrean batch selesai! ---{RESET}\n")
+
+
+def run_gui():
+    """Menjalankan antarmuka Desktop GUI dari gui.py."""
+    try:
+        from gui import JapaneseASMRApp
+        print(f"{GREEN}[INFO] Membuka antarmuka Desktop GUI...{RESET}")
+        app = JapaneseASMRApp()
+        app.mainloop()
+    except ImportError as e:
+        print(f"{RED}[ERROR] Gagal memuat GUI: {e}{RESET}")
+        print(f"{YELLOW}Menjalankan mode CLI sebagai gantinya...{RESET}")
+        run_cli()
+
+
+def main():
+    # Cek jika dipanggil lewat argumen flag
+    if len(sys.argv) > 1:
+        arg = sys.argv[1].lower()
+        if arg in ("--gui", "-g"):
+            run_gui()
+            return
+        elif arg in ("--cli", "-c"):
+            run_cli()
+            return
+
+    # Tampilkan menu pilihan mode
+    print_banner()
+    print(f"{BOLD}Silakan pilih mode yang ingin dijalankan:{RESET}")
+    print(f"  {CYAN}[1]{RESET} Mode Desktop GUI {BOLD}(Preview Cover, Antrean, & Riwayat){RESET}")
+    print(f"  {CYAN}[2]{RESET} Mode Terminal CLI {BOLD}(Cepat & Ringan){RESET}")
+    print(f"  {CYAN}[0]{RESET} Keluar")
+    print()
+
+    try:
+        choice = input(f"{BOLD}Pilih mode [1/2] (Tekan Enter untuk GUI): {RESET}").strip()
+    except (KeyboardInterrupt, EOFError):
+        print(f"\n{YELLOW}Keluar.{RESET}")
+        return
+
+    if choice == "2":
+        run_cli()
+    elif choice == "0":
+        print(f"{YELLOW}Sampai jumpa!{RESET}")
+        return
+    else:
+        run_gui()
 
 
 if __name__ == "__main__":

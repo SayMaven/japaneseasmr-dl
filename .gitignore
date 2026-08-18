@@ -15,3 +15,8 @@ __pycache__/
 # OS files
 Thumbs.db
 .DS_Store
+
+plan.md
+.cache/
+config.json
+history.json

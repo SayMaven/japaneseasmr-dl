@@ -1,19 +1,25 @@
 # 🎧 JapaneseASMR Downloader & Cover Art Embedder
 
-Sebuah script downloader audio HLS/M3U8 otomatis dan penyemat cover art thumbnail untuk konten JapaneseASMR. Mendukung multi-connection parallel download via `aria2c` dan konversi ID3 metadata MP3 via `ffmpeg`.
+Downloader audio HLS/M3U8 & Direct MP3 otomatis dengan penyemat cover art thumbnail, metadata ID3 lengkap, dan antarmuka Desktop GUI + CLI yang intuitif.
 
 ---
 
 ## ✨ Fitur Utama
 
-- 🚀 **Download Paralel Cepat**: Menggunakan `yt-dlp` dengan akselerasi multi-koneksi 16 paralel via `aria2c`.
-- 🖼️ **Penyematan Cover Art**: Otomatis mengunduh cover dan menyematkannya ke dalam metadata MP3 (ID3v2 Album Art).
-- 🔢 **Otomatisasi ID / Kode RJ**: Cukup masukkan kode produk (misal: `RJ01538146` atau `01538146`), URL m3u8, cover, dan nama output akan disusun otomatis.
-- 📦 **Batch Multi-Download**: Mendukung input banyak ID sekaligus dipisahkan koma atau spasi.
-- 📁 **Folder Output Teratur**: Hasil file MP3 otomatis disimpan ke folder `downloads/`.
-- ⏭️ **Auto-Skip**: Otomatis mendeteksi dan melewati file yang sudah pernah diunduh sebelumnya.
-- 🎨 **CLI Interaktif & Berwarna**: Tampilan terminal yang rapi dengan kode warna ANSI.
-- 🔁 **Continuous Loop**: Kembali ke prompt input secara otomatis setelah unduhan selesai.
+- 🖼️ **Aplikasi Desktop GUI (`gui.py`)**:
+  - **Live Preview Cover Art**: Menampilkan gambar cover karya langsung di aplikasi.
+  - **Smart Scraper DLsite**: Otomatis mengekstrak **Judul Asli**, **Pengisi Suara (Multi-CV)**, **Circle / Brand**, **Genre / Tag**, dan **Rating Usia (R18 / All-Ages)**.
+  - **Dukungan Format Fleksibel**: Otomatis mendeteksi sumber audio baik via HLS Stream (`.m3u8`) maupun direct file (`.mp3`).
+  - **Tab Riwayat Unduhan**: Menyimpan daftar semua karya yang pernah didownload beserta cover, tanggal, ukuran, dan status ketersediaan file.
+  - **Offline Cover Cache**: Menyimpan thumbnail cover mini secara lokal di `.cache/covers/` sehingga riwayat dapat dimuat secara offline.
+  - **Custom Download Directory**: Bebas memilih lokasi folder penyimpanan di mana saja melalui tombol *Ganti Folder* (tersimpan di `config.json`).
+  - **Tabel Antrean Interaktif**: Memantau progres antrean unduhan secara multi-threading tanpa freeze.
+- 🚀 **Download Paralel Cepat**: Menggunakan `yt-dlp` dengan akselerasi 16 koneksi paralel via `aria2c`.
+- 🏷️ **Penyematan Metadata ID3 Lengkap**: Menyematkan cover thumbnail, judul, artist (CV), album (Circle), genre, dan comment rating ke file MP3 via `ffmpeg`.
+- 🔢 **Otomatisasi Kode RJ**: Cukup masukkan kode produk (misal: `RJ01673437`, `RJ278932`, dll).
+- 📦 **Batch Multi-Download**: Mendukung download banyak ID sekaligus dalam satu antrean.
+- ⏭️ **Auto-Skip**: Otomatis melewati file yang sudah pernah diunduh sebelumnya.
+- 🎨 **CLI Interaktif & Berwarna (`main.py`)**: Pilihan mode CLI yang cepat dan ringan dengan kode warna ANSI.
 
 ---
 
@@ -21,38 +27,45 @@ Sebuah script downloader audio HLS/M3U8 otomatis dan penyemat cover art thumbnai
 
 Pastikan program-program berikut sudah terinstal di sistem Anda dan terdaftar di PATH:
 
-1. **Python 3.8+** (untuk `main.py`)
-2. **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**
-3. **[aria2](https://github.com/aria2/aria2)** (`aria2c`)
-4. **[ffmpeg](https://ffmpeg.org/)**
-5. **curl** (bawaan Windows 10/11)
+1. **Python 3.8+**
+2. **Pillow** (untuk GUI): `pip install Pillow`
+3. **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**
+4. **[aria2](https://github.com/aria2/aria2)** (`aria2c`)
+5. **[ffmpeg](https://ffmpeg.org/)**
 
 ---
 
 ## 🚀 Cara Penggunaan
 
-### 1. Versi Python (`main.py`) — *Direkomendasikan*
-
-Jalankan script menggunakan Python:
+Cukup jalankan file utama:
 ```bash
 python main.py
 ```
 
-- Masukkan satu kode RJ atau beberapa kode sekaligus:
-  ```text
-  Masukkan Kode/Angka RJ: RJ01538146 RJ01595145 RJ01601293
-  ```
-- File `.mp3` hasil download akan tersimpan di dalam folder `downloads/`.
+Pilih mode yang diinginkan:
+```text
+Silakan pilih mode yang ingin dijalankan:
+  [1] Mode Desktop GUI (Preview Cover, Antrean, & Riwayat)
+  [2] Mode Terminal CLI (Cepat & Ringan)
+  [0] Keluar
+
+Pilih mode [1/2] (Tekan Enter untuk GUI):
+```
+
+### Shortcut Flag (Opsional)
+```bash
+python main.py --gui   # Langsung membuka mode Desktop GUI
+python main.py --cli   # Langsung membuka mode Terminal CLI
+```
 
 ---
 
-### 2. Versi Windows Batch (`main.bat`)
+### Versi Windows Batch (`main.bat`)
 
-Klik ganda `main.bat` atau jalankan via terminal:
+Sebagai cadangan, Anda juga dapat menjalankan:
 ```cmd
 .\main.bat
 ```
-- Masukkan kode RJ yang diinginkan lalu tekan Enter.
 
 ---
 
@@ -60,10 +73,12 @@ Klik ganda `main.bat` atau jalankan via terminal:
 
 ```text
 japaneseasmr-dl/
-├── main.py        # Script utama versi Python (Fitur lengkap & Batch)
-├── main.bat       # Script alternatif / cadangan versi Windows Batch
-├── README.md      # Dokumentasi project
-└── downloads/     # Folder penyimpanan file MP3 hasil download
+├── config_manager.py  # Modul manajemen konfigurasi & riwayat unduhan
+├── gui.py             # Aplikasi Desktop GUI (Dark Mode & Riwayat)
+├── main.py            # Menu utama & Mode Terminal CLI
+├── main.bat           # Script cadangan versi Windows Batch
+├── README.md          # Dokumentasi project
+└── downloads/         # Folder default penyimpanan file MP3
 ```
 
 ---

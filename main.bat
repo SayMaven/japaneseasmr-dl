@@ -3,7 +3,7 @@ setlocal
 
 set "REFERER=https://japaneseasmr.com"
 set "USER_AGENT=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-set "DEFAULT_ID=RJ01538146"
+set "DEFAULT_ID=RJ01673437"
 
 :loop
 echo.
@@ -34,11 +34,16 @@ echo [1/3] Mendownload cover image...
 curl -s -H "Referer: %REFERER%" "%COVER_URL%" -o "temp_cover.jpg"
 
 echo [2/3] Mendownload stream audio (16 parallel connections)...
-yt-dlp -N 16 --downloader aria2c --fixup never --add-header "Referer: %REFERER%" --add-header "Origin: %REFERER%" --user-agent "%USER_AGENT%" "%M3U8_URL%" -x --audio-format mp3 -o "temp_audio.%%(ext)s"
+yt-dlp -N 16 --downloader aria2c --fixup never --add-header "Referer: %REFERER%" --add-header "Origin: %REFERER%" --user-agent "%USER_AGENT%" "https://v.weeab0o.xyz/%RJ_ID%.m3u8" -x --audio-format mp3 -o "temp_audio.%%(ext)s"
+
+if not exist "temp_audio.mp3" (
+    echo [INFO] M3U8 tidak ditemukan, mencoba link direct MP3...
+    yt-dlp -N 16 --downloader aria2c --fixup never --add-header "Referer: %REFERER%" --add-header "Origin: %REFERER%" --user-agent "%USER_AGENT%" "https://v.weeab0o.xyz/%RJ_ID%.mp3" -x --audio-format mp3 -o "temp_audio.%%(ext)s"
+)
 
 if not exist "temp_audio.mp3" (
     echo.
-    echo [ERROR] Gagal mendownload atau mengonversi audio!
+    echo [ERROR] Gagal mendownload audio dari sumber .m3u8 maupun .mp3!
     goto cleanup
 )
 
