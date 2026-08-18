@@ -14,6 +14,7 @@ from PIL import Image, ImageTk
 from config_manager import (
     add_to_history,
     cache_cover_image,
+    discover_all_audio_tracks,
     get_download_dir,
     load_config,
     load_history,
@@ -27,6 +28,159 @@ USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
+
+
+import ctypes
+
+
+def apply_dark_titlebar(window):
+    """Menerapkan Dark Titlebar pada Windows 10/11 agar titlebar jendela utama ikut berwarna gelap."""
+    if sys.platform != "win32":
+        return
+    try:
+        window.update_idletasks()
+        hwnd = ctypes.windll.user32.GetParent(window.winfo_id())
+        if not hwnd:
+            hwnd = window.winfo_id()
+        value = ctypes.c_int(2)
+        set_attr = ctypes.windll.dwmapi.DwmSetWindowAttribute
+        if set_attr(hwnd, 20, ctypes.byref(value), ctypes.sizeof(value)) != 0:
+            set_attr(hwnd, 19, ctypes.byref(value), ctypes.sizeof(value))
+    except Exception:
+        pass
+
+
+class InAppModal:
+    """Modal Dialog In-App yang muncul melayang elegan di tengah jendela aplikasi tanpa menutupi background."""
+    @staticmethod
+    def show(parent, title, message, dialog_type="info", confirm_text="OK", cancel_text="Batal"):
+        result = [False]
+        wait_var = tk.BooleanVar(parent, value=False)
+
+        type_configs = {
+            "info": {"bg": "#50fa7b", "fg": "#1e1e2e", "symbol": "i", "title": title or "Selesai", "title_color": "#50fa7b", "border": "#50fa7b"},
+            "warning": {"bg": "#f1fa8c", "fg": "#1e1e2e", "symbol": "!", "title": title or "Peringatan", "title_color": "#f1fa8c", "border": "#f1fa8c"},
+            "error": {"bg": "#ff5555", "fg": "#ffffff", "symbol": "✕", "title": title or "Error", "title_color": "#ff5555", "border": "#ff5555"},
+            "question": {"bg": "#8be9fd", "fg": "#1e1e2e", "symbol": "?", "title": title or "Konfirmasi", "title_color": "#8be9fd", "border": "#bd93f9"},
+        }
+        cfg = type_configs.get(dialog_type, type_configs["info"])
+
+        # Card Dialog Melayang di Tengah Jendela (Tanpa Frame Hitam Fullscreen)
+        outer_card = tk.Frame(parent, bg=cfg["border"], bd=2)
+        outer_card.place(relx=0.5, rely=0.5, anchor="center")
+
+        card = tk.Frame(outer_card, bg="#282a36", padx=26, pady=22)
+        card.pack(fill="both", expand=True, padx=1, pady=1)
+
+        # Header (Canvas Badge + Judul)
+        header = tk.Frame(card, bg="#282a36")
+        header.pack(fill="x", pady=(0, 14))
+
+        badge = tk.Canvas(header, width=30, height=30, bg="#282a36", highlightthickness=0)
+        badge.pack(side="left", padx=(0, 12))
+        badge.create_oval(2, 2, 28, 28, fill=cfg["bg"], outline=cfg["bg"])
+        badge.create_text(15, 15, text=cfg["symbol"], fill=cfg["fg"], font=("Segoe UI", 12, "bold"))
+
+        lbl_title = tk.Label(header, text=cfg["title"], font=("Segoe UI", 12, "bold"), bg="#282a36", fg=cfg["title_color"])
+        lbl_title.pack(side="left", anchor="center")
+
+        # Message Text
+        msg_frame = tk.Frame(card, bg="#282a36")
+        msg_frame.pack(fill="both", expand=True, pady=(0, 20))
+
+        lbl_msg = tk.Label(
+            msg_frame,
+            text=message,
+            font=("Segoe UI", 10),
+            bg="#282a36",
+            fg="#f8f8f2",
+            wraplength=420,
+            justify="left",
+            anchor="w",
+        )
+        lbl_msg.pack(fill="x")
+
+        # Action Buttons
+        btn_frame = tk.Frame(card, bg="#282a36")
+        btn_frame.pack(fill="x")
+
+        def _close(val):
+            if outer_card.winfo_exists():
+                result[0] = val
+                outer_card.destroy()
+                wait_var.set(True)
+
+        if dialog_type == "question":
+            btn_cancel = tk.Button(
+                btn_frame,
+                text=cancel_text,
+                font=("Segoe UI", 9),
+                bg="#44475a",
+                fg="#f8f8f2",
+                activebackground="#6272a4",
+                activeforeground="#ffffff",
+                bd=0,
+                padx=18,
+                pady=6,
+                cursor="hand2",
+                command=lambda: _close(False),
+            )
+            btn_cancel.pack(side="right", padx=(10, 0))
+
+            btn_ok = tk.Button(
+                btn_frame,
+                text=confirm_text,
+                font=("Segoe UI", 9, "bold"),
+                bg="#bd93f9",
+                fg="#1e1e2e",
+                activebackground="#ff79c6",
+                bd=0,
+                padx=18,
+                pady=6,
+                cursor="hand2",
+                command=lambda: _close(True),
+            )
+            btn_ok.pack(side="right")
+            btn_ok.focus_set()
+        else:
+            btn_ok = tk.Button(
+                btn_frame,
+                text=confirm_text,
+                font=("Segoe UI", 9, "bold"),
+                bg="#bd93f9",
+                fg="#1e1e2e",
+                activebackground="#ff79c6",
+                bd=0,
+                padx=24,
+                pady=6,
+                cursor="hand2",
+                command=lambda: _close(True),
+            )
+            btn_ok.pack(side="right")
+            btn_ok.focus_set()
+
+        parent.bind("<Return>", lambda e: _close(True) if outer_card.winfo_exists() else None)
+        parent.bind("<Escape>", lambda e: _close(False) if outer_card.winfo_exists() else None)
+
+        outer_card.lift()
+        parent.wait_variable(wait_var)
+        return result[0]
+
+
+def show_dark_info(parent, title, message):
+    InAppModal.show(parent, title, message, dialog_type="info", confirm_text="OK")
+
+
+def show_dark_warning(parent, title, message):
+    InAppModal.show(parent, title, message, dialog_type="warning", confirm_text="Mengerti")
+
+
+def show_dark_error(parent, title, message):
+    InAppModal.show(parent, title, message, dialog_type="error", confirm_text="Tutup")
+
+
+def ask_dark_yesno(parent, title, message, confirm_text="Ya", cancel_text="Batal"):
+    return InAppModal.show(parent, title, message, dialog_type="question", confirm_text=confirm_text, cancel_text=cancel_text)
 
 
 def sanitize_filename(name):
@@ -159,6 +313,7 @@ class JapaneseASMRApp(tk.Tk):
         self.geometry("1060x820")
         self.minsize(940, 720)
         self.configure(bg="#1e1e2e")
+        apply_dark_titlebar(self)
 
         # Config & State
         self.config = load_config()
@@ -217,6 +372,17 @@ class JapaneseASMRApp(tk.Tk):
             "Treeview",
             background=[("selected", "#bd93f9")],
             foreground=[("selected", "#1e1e2e")],
+        )
+
+        # Progressbar Styling
+        self.style.configure(
+            "Neon.Horizontal.TProgressbar",
+            troughcolor="#181825",
+            background="#50fa7b",
+            darkcolor="#50fa7b",
+            lightcolor="#50fa7b",
+            bordercolor="#282a36",
+            thickness=12,
         )
 
     def _build_ui(self):
@@ -439,6 +605,40 @@ class JapaneseASMRApp(tk.Tk):
             command=self._clear_queue,
         )
         clear_btn.pack(side="right")
+
+        # Progress Bar Container (Di antara Tombol Aksi dan Log Konsol)
+        progress_container = tk.Frame(left_panel, bg="#1e1e2e")
+        progress_container.pack(fill="x", pady=(0, 10))
+
+        progress_header = tk.Frame(progress_container, bg="#1e1e2e")
+        progress_header.pack(fill="x", pady=(0, 4))
+
+        self.lbl_progress_status = tk.Label(
+            progress_header,
+            text="Status: Siap",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#a6adc8",
+        )
+        self.lbl_progress_status.pack(side="left")
+
+        self.lbl_progress_pct = tk.Label(
+            progress_header,
+            text="0%",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+        )
+        self.lbl_progress_pct.pack(side="right")
+
+        self.progress_bar = ttk.Progressbar(
+            progress_container,
+            orient="horizontal",
+            mode="determinate",
+            style="Neon.Horizontal.TProgressbar",
+        )
+        self.progress_bar.pack(fill="x")
+        self.progress_bar["value"] = 0
 
         # Log Console
         log_frame = tk.LabelFrame(
@@ -827,7 +1027,7 @@ class JapaneseASMRApp(tk.Tk):
 
     def _clear_queue(self):
         if self.is_downloading:
-            messagebox.showwarning("Peringatan", "Tidak dapat membersihkan antrean saat download sedang berlangsung.")
+            show_dark_warning(self, "Peringatan", "Tidak dapat membersihkan antrean saat download sedang berlangsung.")
             return
         self.tree.delete(*self.tree.get_children())
         self.queue_items.clear()
@@ -839,7 +1039,23 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_circle.config(text="-")
         self.lbl_rating.config(text="-", fg="#f8f8f2")
         self.lbl_genre.config(text="-")
+        self._update_progress(0, "Antrean dibersihkan")
         self._log("[i] Antrean dibersihkan.")
+
+    def _log(self, text):
+        def _append():
+            self.log_text.insert("end", text + "\n")
+            self.log_text.see("end")
+        self.after(0, _append)
+
+    def _update_progress(self, val_pct, status_text=None):
+        def _apply():
+            clamped = max(0, min(100, val_pct))
+            self.progress_bar["value"] = clamped
+            self.lbl_progress_pct.config(text=f"{int(clamped)}%")
+            if status_text:
+                self.lbl_progress_status.config(text=f"Status: {status_text}")
+        self.after(0, _apply)
 
     def _load_history_view(self):
         """Memuat ulang tabel riwayat dari history.json."""
@@ -931,10 +1147,12 @@ class JapaneseASMRApp(tk.Tk):
             else:
                 self.lbl_h_path.config(text="❌ File Sudah Dihapus / Tidak Ditemukan", fg="#ff5555")
                 self.btn_play_file.config(state="disabled")
-                ans = messagebox.askyesno(
+                ans = ask_dark_yesno(
+                    self,
                     "File Tidak Ditemukan",
-                    f"File audio untuk '{h.get('rjid', '-')}' sudah tidak ditemukan di lokasi penyimpanan (mungkin telah dipindahkan atau dihapus).\n\nLokasi: {file_path}\n\nApakah Anda ingin menghapus catatan ini dari daftar riwayat?",
-                    icon="warning",
+                    f"File audio untuk '{h.get('rjid', '-')}' sudah tidak ditemukan di lokasi penyimpanan (mungkin telah dipindahkan atau dihapus).\n\nLokasi:\n{file_path}\n\nApakah Anda ingin menghapus catatan ini dari daftar riwayat?",
+                    confirm_text="Hapus Catatan",
+                    cancel_text="Batal",
                 )
                 if ans:
                     self._delete_history_item(idx)
@@ -943,7 +1161,7 @@ class JapaneseASMRApp(tk.Tk):
         if idx is None:
             selected = self.hist_tree.selection()
             if not selected:
-                messagebox.showinfo("Info", "Pilih item riwayat yang ingin dihapus terlebih dahulu.")
+                show_dark_info(self, "Informasi", "Pilih item riwayat yang ingin dihapus terlebih dahulu.")
                 return
             idx = int(selected[0])
 
@@ -971,7 +1189,7 @@ class JapaneseASMRApp(tk.Tk):
         if self.is_downloading:
             return
         if not self.queue_items:
-            messagebox.showinfo("Info", "Silakan tambahkan kode RJ ke antrean terlebih dahulu.")
+            show_dark_info(self, "Informasi", "Silakan tambahkan kode RJ ke antrean terlebih dahulu.")
             return
 
         self.is_downloading = True
@@ -989,13 +1207,20 @@ class JapaneseASMRApp(tk.Tk):
     def _download_worker(self):
         download_dir = get_download_dir()
         os.makedirs(download_dir, exist_ok=True)
+        total_items = len(self.queue_items)
+        self._update_progress(0, f"Mempersiapkan {total_items} item...")
 
         for idx, item in enumerate(self.queue_items):
             if self.stop_requested:
                 self._log("[!] Proses download dihentikan oleh pengguna.")
+                self._update_progress(0, "Download dihentikan")
                 break
 
+            item_step = 100.0 / max(1, total_items)
+            base_pct = idx * item_step
+
             if item["status"] == "Selesai":
+                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Dilewati)")
                 continue
 
             rjid = item["rjid"]
@@ -1013,6 +1238,7 @@ class JapaneseASMRApp(tk.Tk):
                 self._log(f"[SKIP] File '{os.path.basename(final_output)}' sudah ada.")
                 item["status"] = "Selesai"
                 self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai (Ada)"))
+                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Sudah Ada)")
                 continue
 
             # Update status ke downloading
@@ -1020,56 +1246,87 @@ class JapaneseASMRApp(tk.Tk):
             self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Mengunduh..."))
             self.after(0, lambda i=idx: self.tree.selection_set(str(i)))
 
-            audio_url = resolve_audio_url(rjid, REFERER, USER_AGENT)
-            cover_url = f"https://pic.weeabo0.xyz/{rjid}_img_main.jpg"
+            cover_url = item.get("cover_url") or f"https://pic.weeabo0.xyz/{rjid}_img_main.jpg"
+            temp_dir = os.path.join(".cache", "temp")
+            os.makedirs(temp_dir, exist_ok=True)
 
-            temp_cover = f"temp_{rjid}_cover.jpg"
-            temp_audio = f"temp_{rjid}_audio.mp3"
-            temp_tmpl = f"temp_{rjid}_audio.%(ext)s"
-
-            temp_files = [
-                temp_cover,
-                temp_audio,
-                f"temp_{rjid}_audio.mp4",
-                f"temp_{rjid}_audio.temp.mp4",
-                f"temp_{rjid}_audio.(ext)s.mp3",
-            ]
+            temp_cover = os.path.join(temp_dir, f"temp_{rjid}_cover.jpg")
+            temp_files = [temp_cover]
 
             try:
-                self._log(f"\n--- [{idx+1}/{len(self.queue_items)}] Memproses {rjid} ---")
+                self._log(f"\n--- [{idx+1}/{total_items}] Memproses {rjid} ---")
 
-                # 1. Download Cover
+                # 0. Deteksi Semua Track (Multi-track & Omake)
+                self._update_progress(base_pct + item_step * 0.05, f"[{idx+1}/{total_items}] Memindai track audio...")
+                self._log("[0/3] Mendeteksi jumlah track audio...")
+                tracks = discover_all_audio_tracks(rjid, REFERER, USER_AGENT)
+                track_names = [t["name"] for t in tracks]
+                if len(tracks) > 1:
+                    self._log(f"[i] Terdeteksi {len(tracks)} track ({', '.join(track_names)}). Semua akan digabung otomatis!")
+                else:
+                    self._log(f"[i] Terdeteksi 1 track audio.")
+
+                # 1. Download & Standardize Cover to JPEG (agar terbaca Windows Explorer)
+                self._update_progress(base_pct + item_step * 0.15, f"[{idx+1}/{total_items}] Mengunduh cover art...")
                 self._log("[1/3] Mengunduh cover art...")
                 req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req, timeout=10) as resp, open(temp_cover, "wb") as f:
-                    f.write(resp.read())
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    img_bytes = resp.read()
+                with Image.open(io.BytesIO(img_bytes)) as pil_c:
+                    pil_c.convert("RGB").save(temp_cover, "JPEG", quality=92)
 
-                # 2. Download Stream Audio via yt-dlp + aria2c
-                self._log("[2/3] Mengunduh stream audio paralel (16 koneksi)...")
-                cmd_ytdlp = [
-                    "yt-dlp",
-                    "-N", "16",
-                    "--downloader", "aria2c",
-                    "--fixup", "never",
-                    "--add-header", f"Referer: {REFERER}",
-                    "--add-header", f"Origin: {REFERER}",
-                    "--user-agent", USER_AGENT,
-                    audio_url,
-                    "-x",
-                    "--audio-format", "mp3",
-                    "-o", temp_tmpl,
-                ]
-                subprocess.run(
-                    cmd_ytdlp,
-                    check=True,
-                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                )
+                # 2. Download Semua Track Audio
+                downloaded_track_files = []
+                for t_idx, track_info in enumerate(tracks, start=1):
+                    t_name = track_info["name"]
+                    t_url = track_info["url"]
+                    t_out_tmpl = os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.%(ext)s")
+                    t_final_mp3 = os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp3")
 
-                if not os.path.exists(temp_audio):
-                    raise FileNotFoundError("File audio sementara gagal diproses.")
+                    temp_files.extend([
+                        t_final_mp3,
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}_.mp3"),
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp4"),
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.temp.mp4"),
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
+                    ])
 
-                # 3. Embed Thumbnail & Full Metadata ke MP3 via FFmpeg
-                self._log("[3/3] Menyematkan cover art, Genre, Rating & metadata ID3...")
+                    track_prog = base_pct + item_step * (0.15 + 0.65 * (t_idx / len(tracks)))
+                    self._update_progress(track_prog, f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]...")
+                    self._log(f"[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}] (16 koneksi)...")
+                    cmd_ytdlp = [
+                        "yt-dlp",
+                        "-N", "16",
+                        "--downloader", "aria2c",
+                        "--fixup", "never",
+                        "--add-header", f"Referer: {REFERER}",
+                        "--add-header", f"Origin: {REFERER}",
+                        "--user-agent", USER_AGENT,
+                        t_url,
+                        "-x",
+                        "--audio-format", "mp3",
+                        "-o", t_out_tmpl,
+                    ]
+                    subprocess.run(
+                        cmd_ytdlp,
+                        check=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                    )
+
+                    # Deteksi file audio yang berhasil dibuat
+                    possible_files = [
+                        t_final_mp3,
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}_.mp3"),
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
+                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp4"),
+                    ]
+                    actual_file = next((f for f in possible_files if os.path.exists(f)), None)
+
+                    if not actual_file:
+                        raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
+                    downloaded_track_files.append(actual_file)
+
+                # 3. Embed Thumbnail & Full Metadata ke MP3 (serta Concatenate jika Multi-track)
                 artist_val = item.get("cv", "")
                 if not artist_val or artist_val == "-":
                     artist_val = "JapaneseASMR"
@@ -1081,26 +1338,67 @@ class JapaneseASMRApp(tk.Tk):
                     genre_val = "ASMR"
                 rating_val = item.get("age_rating", "-")
 
-                cmd_ffmpeg = [
-                    "ffmpeg",
-                    "-hide_banner",
-                    "-loglevel", "error",
-                    "-y",
-                    "-i", temp_audio,
-                    "-i", temp_cover,
-                    "-map", "0:a",
-                    "-map", "1:v",
-                    "-c", "copy",
-                    "-id3v2_version", "3",
-                    "-metadata:s:v", "title=Album cover",
-                    "-metadata:s:v", "comment=Cover (front)",
-                    "-metadata", f"title={title if title else rjid}",
-                    "-metadata", f"artist={artist_val}",
-                    "-metadata", f"album={album_val}",
-                    "-metadata", f"genre={genre_val}",
-                    "-metadata", f"comment=Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}",
-                    final_output,
-                ]
+                self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata ID3...")
+
+                if len(downloaded_track_files) > 1:
+                    self._log(f"[3/3] Menggabungkan {len(tracks)} track & menyematkan metadata ID3...")
+                    concat_list_file = os.path.join(temp_dir, f"concat_{rjid}.txt")
+                    temp_files.append(concat_list_file)
+                    with open(concat_list_file, "w", encoding="utf-8") as f_concat:
+                        for tf in downloaded_track_files:
+                            safe_p = os.path.abspath(tf).replace("\\", "/")
+                            f_concat.write(f"file '{safe_p}'\n")
+
+                    cmd_ffmpeg = [
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel", "error",
+                        "-y",
+                        "-f", "concat",
+                        "-safe", "0",
+                        "-i", concat_list_file,
+                        "-i", temp_cover,
+                        "-map", "0:a",
+                        "-map", "1:v",
+                        "-c:a", "libmp3lame",
+                        "-q:a", "2",
+                        "-c:v", "mjpeg",
+                        "-disposition:v:0", "attached_pic",
+                        "-id3v2_version", "3",
+                        "-metadata:s:v", "title=Album cover",
+                        "-metadata:s:v", "comment=Cover (front)",
+                        "-metadata", f"title={title if title else rjid}",
+                        "-metadata", f"artist={artist_val}",
+                        "-metadata", f"album={album_val}",
+                        "-metadata", f"genre={genre_val}",
+                        "-metadata", f"comment=Rating: {rating_val} | Tracks: {len(tracks)} Gabungan ({', '.join(track_names)})",
+                        final_output,
+                    ]
+                else:
+                    self._log("[3/3] Menyematkan cover art, Genre, Rating & metadata ID3...")
+                    cmd_ffmpeg = [
+                        "ffmpeg",
+                        "-hide_banner",
+                        "-loglevel", "error",
+                        "-y",
+                        "-i", downloaded_track_files[0],
+                        "-i", temp_cover,
+                        "-map", "0:a",
+                        "-map", "1:v",
+                        "-c:a", "copy",
+                        "-c:v", "mjpeg",
+                        "-disposition:v:0", "attached_pic",
+                        "-id3v2_version", "3",
+                        "-metadata:s:v", "title=Album cover",
+                        "-metadata:s:v", "comment=Cover (front)",
+                        "-metadata", f"title={title if title else rjid}",
+                        "-metadata", f"artist={artist_val}",
+                        "-metadata", f"album={album_val}",
+                        "-metadata", f"genre={genre_val}",
+                        "-metadata", f"comment=Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}",
+                        final_output,
+                    ]
+
                 subprocess.run(
                     cmd_ffmpeg,
                     check=True,
@@ -1123,6 +1421,7 @@ class JapaneseASMRApp(tk.Tk):
                 item["status"] = "Selesai"
                 self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai"))
                 self.after(0, self._load_history_view)
+                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai {rjid}")
                 self._log(f"[✓] SUKSES: Tersimpan di {os.path.basename(final_output)}")
 
             except Exception as e:
@@ -1141,8 +1440,9 @@ class JapaneseASMRApp(tk.Tk):
         self.is_downloading = False
         self.start_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
+        self._update_progress(100, "Semua proses selesai (100%)")
         self._log("\n--- Semua proses download dalam antrean selesai ---")
-        messagebox.showinfo("Selesai", "Semua proses unduhan dalam antrean telah selesai!")
+        self.after(0, lambda: show_dark_info(self, "Selesai", "Semua proses unduhan dalam antrean telah selesai!"))
 
 
 if __name__ == "__main__":

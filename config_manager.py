@@ -126,35 +126,107 @@ def add_to_history(rjid, title, cv, circle, cover_url, output_path, temp_cover_p
     save_history(histories)
 
 
-def resolve_audio_url(rj_id, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):
+def check_url_exists(url, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):
+    """Mengecek apakah URL dapat diakses (200 / 206 OK)."""
+    import urllib.request
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                "Referer": referer,
+                "User-Agent": user_agent,
+                "Range": "bytes=0-10",
+            },
+        )
+        with urllib.request.urlopen(req, timeout=3.5) as resp:
+            if resp.status in (200, 206):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def discover_all_audio_tracks(rj_id, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):
     """
-    Mendeteksi URL audio yang valid (.m3u8 atau .mp3).
-    Jika user memasukkan URL lengkap, langsung gunakan URL tersebut.
+    Mendeteksi semua track audio (Track 1, Track 2, ..., Omake, Bonus) untuk satu Kode RJ.
+    - Jika stream .m3u8 tersedia, dipastikan hanya 1 track (langsung dikembalikan tanpa scan multi-track).
+    - Jika stream bertipe .mp3 direct, sistem akan memindai kemungkinan multi-track dan omake.
     """
     clean_id = rj_id.strip()
     if clean_id.startswith("http://") or clean_id.startswith("https://"):
-        return clean_id
+        return [{"name": "Track 1", "url": clean_id}]
 
-    candidates = [
-        f"https://v.weeab0o.xyz/{clean_id}.m3u8",
+    # 1. Cek apakah ada file master HLS .m3u8 (m3u8 selalu 1 track tunggal utuh)
+    m3u8_url = f"https://v.weeab0o.xyz/{clean_id}.m3u8"
+    if check_url_exists(m3u8_url, referer, user_agent):
+        return [{"name": "Track 1", "url": m3u8_url}]
+
+    found_tracks = []
+
+    # 2. Cek Track 1 (.mp3)
+    t1_candidates = [
         f"https://v.weeab0o.xyz/{clean_id}.mp3",
+        f"https://v.weeab0o.xyz/{clean_id}%201.mp3",
+        f"https://v.weeab0o.xyz/{clean_id}_1.mp3",
+        f"https://v.weeab0o.xyz/{clean_id}-1.mp3",
     ]
+    t1_url = None
+    for url in t1_candidates:
+        if check_url_exists(url, referer, user_agent):
+            t1_url = url
+            break
 
-    import urllib.request
-    for url in candidates:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "Referer": referer,
-                    "User-Agent": user_agent,
-                    "Range": "bytes=0-10",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=4) as resp:
-                if resp.status in (200, 206):
-                    return url
-        except Exception:
-            continue
+    if t1_url:
+        found_tracks.append({"name": "Track 1", "url": t1_url})
+    else:
+        found_tracks.append({"name": "Track 1", "url": t1_candidates[0]})
 
-    return candidates[0]
+    # 3. Cek Track 2 s/d 20 (.mp3)
+    for track_num in range(2, 21):
+        num_candidates = [
+            f"https://v.weeab0o.xyz/{clean_id}%20{track_num}.mp3",
+            f"https://v.weeab0o.xyz/{clean_id}_{track_num}.mp3",
+            f"https://v.weeab0o.xyz/{clean_id}-{track_num}.mp3",
+            f"https://v.weeab0o.xyz/{clean_id}{track_num}.mp3",
+        ]
+        matched_url = None
+        for url in num_candidates:
+            if check_url_exists(url, referer, user_agent):
+                matched_url = url
+                break
+        if matched_url:
+            found_tracks.append({"name": f"Track {track_num}", "url": matched_url})
+        else:
+            if track_num >= 4:
+                # Jika track berturut-turut tidak ada, hentikan scanning angka
+                break
+
+    # 4. Cek Omake / Bonus / Tokuten (.mp3)
+    omake_patterns = [
+        ("Omake", f"https://v.weeab0o.xyz/{clean_id}omake.mp3"),
+        ("Omake", f"https://v.weeab0o.xyz/{clean_id}%20omake.mp3"),
+        ("Omake", f"https://v.weeab0o.xyz/{clean_id}_omake.mp3"),
+        ("Omake", f"https://v.weeab0o.xyz/{clean_id}-omake.mp3"),
+        ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}omake1.mp3"),
+        ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}%20omake%201.mp3"),
+        ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}omake2.mp3"),
+        ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}%20omake%202.mp3"),
+        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}bonus.mp3"),
+        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}%20bonus.mp3"),
+        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}_bonus.mp3"),
+        ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}tokuten.mp3"),
+        ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}%20tokuten.mp3"),
+    ]
+    seen_urls = {t["url"] for t in found_tracks}
+    for om_name, om_url in omake_patterns:
+        if om_url not in seen_urls and check_url_exists(om_url, referer, user_agent):
+            found_tracks.append({"name": om_name, "url": om_url})
+            seen_urls.add(om_url)
+
+    return found_tracks
+
+
+def resolve_audio_url(rj_id, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):
+    """Mendeteksi single URL audio pertama."""
+    tracks = discover_all_audio_tracks(rj_id, referer, user_agent)
+    return tracks[0]["url"] if tracks else f"https://v.weeab0o.xyz/{rj_id}.mp3"
