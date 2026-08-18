@@ -10,7 +10,7 @@ CACHE_DIR = os.path.join(".cache", "covers")
 
 DEFAULT_CONFIG = {
     "download_dir": "downloads",
-    "use_detailed_filename": True,
+    "use_detailed_filename": False,
     "default_id": "RJ01673437",
 }
 

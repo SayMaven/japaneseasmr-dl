@@ -191,20 +191,21 @@ def sanitize_filename(name):
 
 
 def fetch_dlsite_metadata(rj_id):
-    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating) dari DLsite."""
+    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating) langsung dari DLsite resmi."""
+    clean_id = rj_id.strip().upper()
     info = {
-        "title": "",
+        "title": clean_id,
         "cv": "-",
         "circle": "-",
         "genre": "-",
         "age_rating": "-",
-        "cover_url": f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg",
+        "cover_url": f"https://pic.weeabo0.xyz/{clean_id}_img_main.jpg",
     }
     urls = [
-        f"https://www.dlsite.com/maniax/work/=/product_id/{rj_id}.html",
-        f"https://www.dlsite.com/home/work/=/product_id/{rj_id}.html",
-        f"https://www.dlsite.com/girls/work/=/product_id/{rj_id}.html",
-        f"https://www.dlsite.com/pro/work/=/product_id/{rj_id}.html",
+        f"https://www.dlsite.com/maniax/work/=/product_id/{clean_id}.html",
+        f"https://www.dlsite.com/home/work/=/product_id/{clean_id}.html",
+        f"https://www.dlsite.com/girls/work/=/product_id/{clean_id}.html",
+        f"https://www.dlsite.com/pro/work/=/product_id/{clean_id}.html",
     ]
 
     for url in urls:
@@ -223,8 +224,11 @@ def fetch_dlsite_metadata(rj_id):
             title_match = re.search(r'<meta itemprop="name" content="(.*?)">', page_html)
             if not title_match:
                 title_match = re.search(r'id=["\']work_name["\'][^>]*>(.*?)</h1>', page_html, re.DOTALL)
+            if not title_match:
+                title_match = re.search(r'<title>(.*?)</title>', page_html, re.DOTALL)
             if title_match:
                 raw_title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
+                raw_title = re.sub(r"\s*\[[^\]]+\]\s*\|\s*DLsite.*$", "", raw_title)
                 raw_title = raw_title.replace(" | DLsite", "").replace(" - DLsite", "").strip()
                 info["title"] = html.unescape(raw_title)
 
@@ -240,6 +244,12 @@ def fetch_dlsite_metadata(rj_id):
                 brand_match = re.search(r'<div itemprop="brand"[^>]*>.*?<meta itemprop="name" content="(.*?)">', page_html, re.DOTALL)
                 if not brand_match:
                     brand_match = re.search(r'"position":\s*3,\s*"name":\s*"([^"]+)"', page_html)
+                if not brand_match:
+                    # Ambil dari tag <title> ... [Circle] | DLsite ...
+                    t_match = re.search(r'\[(.*?)\]\s*\|\s*DLsite', page_html)
+                    if t_match:
+                        brand_match = t_match
+
                 if brand_match:
                     raw_brand = html.unescape(brand_match.group(1).strip())
                     if "/" in raw_brand:
@@ -250,7 +260,7 @@ def fetch_dlsite_metadata(rj_id):
                     else:
                         info["circle"] = raw_brand
 
-            # 3. Ambil CV / Voice Actor (Bisa 1 atau banyak Seiyuu)
+            # 3. Ambil CV / Voice Actor dari Tabel
             cv_match = re.search(r'<th>\s*(?:声優|キャラクターボイス|ボイス|キャスト)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if cv_match:
                 cvs = re.findall(r'<a[^>]*>(.*?)</a>', cv_match.group(1), re.DOTALL)
@@ -262,22 +272,28 @@ def fetch_dlsite_metadata(rj_id):
                     if raw_cv_td:
                         info["cv"] = html.unescape(raw_cv_td)
 
-            # 4. Fallback CV dari Judul / Deskripsi jika belum terisi
+            # 4. Fallback CV dari Judul / Deskripsi / Teks Halaman jika belum terisi
             if info["cv"] == "-":
                 desc_match = re.search(r'<meta itemprop="description" content="(.*?)">', page_html, re.DOTALL)
                 desc_text = html.unescape(desc_match.group(1)) if desc_match else ""
                 combined_text = f"{info['title']} {desc_text}"
 
-                cv_entries = re.findall(r'(?:CV|声優|キャラクターボイス|ボイス|キャスト|声の出演)[：:\s【\[（(]+([^\n\r,、/】\]）)\s]+)', combined_text, re.IGNORECASE)
+                cv_patterns = [
+                    r'(?:CV|声優|キャラクターボイス|ボイス|キャスト|CV\.|CV：|CV:)\s*[：:\s【\[（(「『]*([^\n\r,、/】\]）)」』\s]{2,30})',
+                    r'【(?:CV|声優|ボイス)\s*[：:\s]*([^\n\r,、/】\]）)\s]+)】',
+                    r'\((?:CV|声優|ボイス)\s*[：:\s]*([^\n\r,、/】\]）)\s]+)\)',
+                ]
                 valid_cvs = []
-                for entry in cv_entries:
-                    clean_entry = entry.strip()
-                    if 1 < len(clean_entry) < 30 and not clean_entry.startswith("http") and clean_entry not in valid_cvs:
-                        valid_cvs.append(clean_entry)
+                for pat in cv_patterns:
+                    matches = re.findall(pat, combined_text, re.IGNORECASE)
+                    for m in matches:
+                        clean_m = m.strip()
+                        if 1 < len(clean_m) < 30 and not clean_m.startswith("http") and clean_m not in valid_cvs:
+                            valid_cvs.append(clean_m)
                 if valid_cvs:
                     info["cv"] = ", ".join(valid_cvs)
 
-            # 5. Ambil Genre / Tag
+            # 5. Ambil Genre / Tag dari Tabel atau Meta Keywords DLsite
             genre_match = re.search(r'<th>\s*(?:ジャンル|タグ)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if genre_match:
                 g_links = re.findall(r'<a[^>]*>(.*?)</a>', genre_match.group(1), re.DOTALL)
@@ -289,16 +305,28 @@ def fetch_dlsite_metadata(rj_id):
                     if raw_g:
                         info["genre"] = html.unescape(", ".join([x.strip() for x in raw_g.splitlines() if x.strip()]))
 
+            # Fallback Genre dari meta keywords
+            if info["genre"] == "-":
+                kw_match = re.search(r'<meta name="keywords" content="(.*?)">', page_html)
+                if kw_match:
+                    raw_kws = [k.strip() for k in html.unescape(kw_match.group(1)).split(",") if k.strip()]
+                    ignore_list = ["DLsite", "同人", "ダウンロード", "R18", "同人誌", "ゲーム", "音声", info.get("circle", "")]
+                    filtered_kws = [k for k in raw_kws if k not in ignore_list and not k.startswith("RJ")]
+                    if filtered_kws:
+                        info["genre"] = ", ".join(filtered_kws[:12])
+
             # 6. Ambil Rating Usia (年齢指定)
             age_match = re.search(r'<th>\s*(?:年齢指定|レーティング)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if age_match:
                 clean_age = re.sub(r'<[^>]+>', '', age_match.group(1)).strip()
                 if clean_age:
                     info["age_rating"] = html.unescape(clean_age)
-            elif "maniax" in url or "r18" in page_html.lower():
+            elif "maniax" in url or "r18" in page_html.lower() or "18禁" in page_html:
                 info["age_rating"] = "R18"
+            else:
+                info["age_rating"] = "全年齢"
 
-            if info["title"]:
+            if info["title"] and info["title"] != clean_id:
                 break
         except Exception:
             continue
@@ -319,13 +347,28 @@ class JapaneseASMRApp(tk.Tk):
         self.config = load_config()
         self.is_downloading = False
         self.stop_requested = False
+        self.current_process = None
         self.queue_items = []
         self.current_preview_image = None
         self.placeholder_text = "RJ01673437"
+        self.opt_detailed_name = tk.BooleanVar(value=self.config.get("use_detailed_filename", False))
+
+        # Audio Player State (Windows Native MCI Engine)
+        self.current_playing_file = None
+        self.current_playing_meta = {}
+        self.is_playing = False
+        self.is_paused = False
+        self.player_duration_ms = 0
+        self.is_user_dragging_slider = False
+        self.is_looping = False
+        self.playlist_items = []
+        self.current_track_index = -1
+        self.player_preview_image = None
 
         self._init_styles()
         self._build_ui()
         self._load_history_view()
+        self._refresh_playlist_view()
 
     def _init_styles(self):
         self.style = ttk.Style(self)
@@ -447,7 +490,7 @@ class JapaneseASMRApp(tk.Tk):
         )
         self.lbl_current_dir.pack(fill="x", padx=15, pady=2)
 
-        # Notebook (Tab Antrean vs Riwayat)
+        # Notebook (3 Tab: Antrean, Riwayat, Pemutar Audio)
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill="both", expand=True, padx=15, pady=10)
 
@@ -458,10 +501,23 @@ class JapaneseASMRApp(tk.Tk):
         # Tab 2: Riwayat Unduhan
         self.tab_history = tk.Frame(self.notebook, bg="#1e1e2e")
         self.notebook.add(self.tab_history, text=" 📜 Riwayat Unduhan ")
-        self.notebook.bind("<<NotebookTabChanged>>", lambda e: self._load_history_view())
+
+        # Tab 3: Pemutar Audio Bawaan
+        self.tab_player = tk.Frame(self.notebook, bg="#1e1e2e")
+        self.notebook.add(self.tab_player, text=" 🎵 Pemutar Audio ")
+
+        self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
         self._build_queue_tab()
         self._build_history_tab()
+        self._build_player_tab()
+
+    def _on_tab_changed(self, event):
+        selected_tab = self.notebook.select()
+        if selected_tab == str(self.tab_history):
+            self._load_history_view()
+        elif selected_tab == str(self.tab_player):
+            self._refresh_playlist_view()
 
     def _build_queue_tab(self):
         main_container = self.tab_queue
@@ -469,7 +525,7 @@ class JapaneseASMRApp(tk.Tk):
         left_panel = tk.Frame(main_container, bg="#1e1e2e")
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10), pady=10)
 
-        # 1. Input Box
+        # 1. Input Box Frame
         input_frame = tk.LabelFrame(
             left_panel,
             text=" Input Kode RJ / URL ",
@@ -482,7 +538,7 @@ class JapaneseASMRApp(tk.Tk):
         input_frame.pack(fill="x", pady=(0, 10), ipady=5)
 
         input_inner = tk.Frame(input_frame, bg="#1e1e2e")
-        input_inner.pack(fill="x", padx=10, pady=5)
+        input_inner.pack(fill="x", padx=10, pady=(6, 4))
 
         self.id_entry = tk.Entry(
             input_inner,
@@ -493,7 +549,7 @@ class JapaneseASMRApp(tk.Tk):
             bd=1,
             relief="solid",
         )
-        self.id_entry.pack(side="left", fill="x", expand=True, padx=(0, 10), ipady=4)
+        self.id_entry.pack(side="left", fill="x", expand=True, padx=(0, 8), ipady=4)
         self.id_entry.insert(0, self.placeholder_text)
 
         def _on_entry_focus_in(event):
@@ -510,6 +566,22 @@ class JapaneseASMRApp(tk.Tk):
         self.id_entry.bind("<FocusOut>", _on_entry_focus_out)
         self.id_entry.bind("<Return>", lambda e: self._add_to_queue())
 
+        paste_btn = tk.Button(
+            input_inner,
+            text="📋 Tempel",
+            font=("Segoe UI", 9, "bold"),
+            bg="#44475a",
+            fg="#8be9fd",
+            activebackground="#6272a4",
+            activeforeground="#ffffff",
+            bd=0,
+            padx=10,
+            pady=4,
+            cursor="hand2",
+            command=self._paste_from_clipboard,
+        )
+        paste_btn.pack(side="left", padx=(0, 8))
+
         add_btn = tk.Button(
             input_inner,
             text="➕ Tambah ke Antrean",
@@ -524,6 +596,25 @@ class JapaneseASMRApp(tk.Tk):
             command=self._add_to_queue,
         )
         add_btn.pack(side="right")
+
+        # Opsi Checkbox Nama File (Diletakkan rapi di bawah baris input)
+        opts_frame = tk.Frame(input_frame, bg="#1e1e2e")
+        opts_frame.pack(fill="x", padx=10, pady=(2, 4))
+
+        chk_name = tk.Checkbutton(
+            opts_frame,
+            text="Gunakan Judul Asli Karya sebagai Nama File MP3",
+            variable=self.opt_detailed_name,
+            command=self._save_options,
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            font=("Segoe UI", 9),
+            bd=0,
+        )
+        chk_name.pack(side="left")
 
         # 2. Tabel Antrean
         queue_frame = tk.LabelFrame(
@@ -677,25 +768,6 @@ class JapaneseASMRApp(tk.Tk):
         right_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
         right_panel.pack_propagate(False)
 
-        # Bottom Options (Docked first)
-        options_frame = tk.Frame(right_panel, bg="#1e1e2e")
-        options_frame.pack(fill="x", padx=12, pady=(0, 10), side="bottom")
-
-        self.opt_detailed_name = tk.BooleanVar(value=self.config.get("use_detailed_filename", True))
-        chk_name = tk.Checkbutton(
-            options_frame,
-            text="Gunakan Judul Asli di Nama File",
-            variable=self.opt_detailed_name,
-            command=self._save_options,
-            bg="#1e1e2e",
-            fg="#8be9fd",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#8be9fd",
-            font=("Segoe UI", 8),
-        )
-        chk_name.pack(anchor="w")
-
         # Canvas Cover
         self.cover_canvas = tk.Canvas(
             right_panel,
@@ -731,7 +803,7 @@ class JapaneseASMRApp(tk.Tk):
 
         # Header Riwayat
         h_header = tk.Frame(left_h_panel, bg="#1e1e2e")
-        h_header.pack(fill="x", pady=(0, 8))
+        h_header.pack(fill="x", pady=(0, 6))
 
         lbl_hist_title = tk.Label(
             h_header,
@@ -755,6 +827,22 @@ class JapaneseASMRApp(tk.Tk):
             command=self._load_history_view,
         )
         refresh_btn.pack(side="right")
+
+        # Banner Statistik Penyimpanan
+        stats_frame = tk.Frame(left_h_panel, bg="#282a36", bd=1, relief="solid")
+        stats_frame.pack(fill="x", pady=(0, 8))
+
+        self.lbl_hist_stats = tk.Label(
+            stats_frame,
+            text="📊 Memuat statistik koleksi...",
+            font=("Segoe UI", 9, "bold"),
+            bg="#282a36",
+            fg="#8be9fd",
+            padx=10,
+            pady=5,
+            anchor="w",
+        )
+        self.lbl_hist_stats.pack(fill="x")
 
         # Tabel Riwayat Treeview
         cols = ("date", "rjid", "title", "size")
@@ -790,13 +878,13 @@ class JapaneseASMRApp(tk.Tk):
         right_h_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
         right_h_panel.pack_propagate(False)
 
-        # Tombol Buka File di Riwayat (Pack di bottom terlebih dahulu)
+        # Tombol Buka File di Riwayat
         h_actions = tk.Frame(right_h_panel, bg="#1e1e2e")
         h_actions.pack(fill="x", padx=12, pady=10, side="bottom")
 
         self.btn_play_file = tk.Button(
             h_actions,
-            text="▶️ Putar / Buka File",
+            text="▶️ Putar di Player Bawaan",
             font=("Segoe UI", 9, "bold"),
             bg="#50fa7b",
             fg="#1e1e2e",
@@ -804,7 +892,7 @@ class JapaneseASMRApp(tk.Tk):
             pady=6,
             cursor="hand2",
             state="disabled",
-            command=self._open_selected_history_file,
+            command=self._play_history_in_player,
         )
         self.btn_play_file.pack(fill="x", pady=(0, 6))
 
@@ -847,6 +935,232 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_h_rating = self._create_info_row(h_info_inner, "Rating Usia", "-")
         self.lbl_h_genre = self._create_info_row(h_info_inner, "Genre / Tag", "-")
         self.lbl_h_path = self._create_info_row(h_info_inner, "Status File", "-")
+
+    def _build_player_tab(self):
+        container = self.tab_player
+
+        # 1. Panel Kiri: Playlist & Koleksi
+        left_p_panel = tk.Frame(container, bg="#1e1e2e")
+        left_p_panel.pack(side="left", fill="both", expand=True, padx=(0, 10), pady=10)
+
+        p_header = tk.Frame(left_p_panel, bg="#1e1e2e")
+        p_header.pack(fill="x", pady=(0, 6))
+
+        lbl_p_title = tk.Label(
+            p_header,
+            text="📻 Daftar Putar / Koleksi Audio",
+            font=("Segoe UI", 11, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+        )
+        lbl_p_title.pack(side="left")
+
+        refresh_p_btn = tk.Button(
+            p_header,
+            text="🔄 Segarkan Playlist",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#f8f8f2",
+            bd=0,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._refresh_playlist_view,
+        )
+        refresh_p_btn.pack(side="right")
+
+        # Treeview Playlist
+        cols = ("rjid", "title", "cv", "size")
+        self.player_tree = ttk.Treeview(left_p_panel, columns=cols, show="headings", selectmode="browse")
+        self.player_tree.heading("rjid", text="Kode RJ", anchor="center")
+        self.player_tree.heading("title", text="Judul Karya", anchor="w")
+        self.player_tree.heading("cv", text="CV / Seiyuu", anchor="w")
+        self.player_tree.heading("size", text="Ukuran", anchor="center")
+
+        self.player_tree.column("rjid", width=95, anchor="center")
+        self.player_tree.column("title", width=220, anchor="w")
+        self.player_tree.column("cv", width=120, anchor="w")
+        self.player_tree.column("size", width=70, anchor="center")
+
+        p_scroll = ttk.Scrollbar(left_p_panel, orient="vertical", command=self.player_tree.yview)
+        self.player_tree.configure(yscrollcommand=p_scroll.set)
+
+        self.player_tree.pack(side="left", fill="both", expand=True)
+        p_scroll.pack(side="right", fill="y")
+        self.player_tree.bind("<Double-1>", lambda e: self._player_play_selected())
+        self.player_tree.bind("<<TreeviewSelect>>", self._on_playlist_select)
+
+        # 2. Panel Kanan: Now Playing Screen & Controls
+        right_p_panel = tk.LabelFrame(
+            container,
+            text=" Sedang Diputar (Now Playing) ",
+            font=("Segoe UI", 10, "bold"),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            bd=1,
+            relief="solid",
+            width=360,
+        )
+        right_p_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
+        right_p_panel.pack_propagate(False)
+
+        # Cover Canvas
+        self.player_canvas = tk.Canvas(
+            right_p_panel,
+            bg="#282a36",
+            width=290,
+            height=195,
+            bd=0,
+            highlightthickness=1,
+            highlightbackground="#bd93f9",
+        )
+        self.player_canvas.pack(pady=(10, 8), padx=12)
+        self.player_canvas.create_text(
+            145, 97, text="Pilih audio dari playlist untuk memutar", fill="#6272a4", font=("Segoe UI", 9), justify="center"
+        )
+
+        # Meta Info
+        self.lbl_p_now_title = tk.Label(
+            right_p_panel,
+            text="Belum Ada Audio Diputar",
+            font=("Segoe UI", 10, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+            wraplength=320,
+            justify="center",
+        )
+        self.lbl_p_now_title.pack(fill="x", padx=10, pady=(0, 2))
+
+        self.lbl_p_now_sub = tk.Label(
+            right_p_panel,
+            text="CV: - | Circle: -",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#a6adc8",
+            wraplength=320,
+            justify="center",
+        )
+        self.lbl_p_now_sub.pack(fill="x", padx=10, pady=(0, 8))
+
+        # Timeline Slider & Duration Labels
+        timeline_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        timeline_frame.pack(fill="x", padx=12, pady=(0, 4))
+
+        self.lbl_time_cur = tk.Label(timeline_frame, text="00:00", font=("Consolas", 9), bg="#1e1e2e", fg="#50fa7b")
+        self.lbl_time_cur.pack(side="left")
+
+        self.lbl_time_total = tk.Label(timeline_frame, text="00:00", font=("Consolas", 9), bg="#1e1e2e", fg="#a6adc8")
+        self.lbl_time_total.pack(side="right")
+
+        self.timeline_slider = ttk.Scale(
+            right_p_panel,
+            from_=0,
+            to=100,
+            orient="horizontal",
+            command=self._on_slider_change,
+        )
+        self.timeline_slider.pack(fill="x", padx=12, pady=(0, 8))
+        self.timeline_slider.bind("<ButtonPress-1>", lambda e: setattr(self, "is_user_dragging_slider", True))
+        self.timeline_slider.bind("<ButtonRelease-1>", self._on_slider_release)
+
+        # Control Buttons Row
+        ctrl_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        ctrl_frame.pack(pady=(0, 8))
+
+        btn_prev = tk.Button(
+            ctrl_frame,
+            text="⏮",
+            font=("Segoe UI", 11, "bold"),
+            bg="#44475a",
+            fg="#f8f8f2",
+            activebackground="#6272a4",
+            bd=0,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._player_prev_track,
+        )
+        btn_prev.pack(side="left", padx=3)
+
+        self.btn_play_pause = tk.Button(
+            ctrl_frame,
+            text="▶ Putar",
+            font=("Segoe UI", 10, "bold"),
+            bg="#50fa7b",
+            fg="#1e1e2e",
+            activebackground="#8be9fd",
+            bd=0,
+            padx=14,
+            pady=4,
+            cursor="hand2",
+            command=self._player_play_pause_toggle,
+        )
+        self.btn_play_pause.pack(side="left", padx=3)
+
+        btn_stop = tk.Button(
+            ctrl_frame,
+            text="■",
+            font=("Segoe UI", 11, "bold"),
+            bg="#44475a",
+            fg="#f8f8f2",
+            activebackground="#ff5555",
+            bd=0,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._player_stop,
+        )
+        btn_stop.pack(side="left", padx=3)
+
+        btn_next = tk.Button(
+            ctrl_frame,
+            text="⏭",
+            font=("Segoe UI", 11, "bold"),
+            bg="#44475a",
+            fg="#f8f8f2",
+            activebackground="#6272a4",
+            bd=0,
+            padx=8,
+            pady=3,
+            cursor="hand2",
+            command=self._player_next_track,
+        )
+        btn_next.pack(side="left", padx=3)
+
+        self.btn_loop = tk.Button(
+            ctrl_frame,
+            text="🔁 Loop: OFF",
+            font=("Segoe UI", 8),
+            bg="#44475a",
+            fg="#a6adc8",
+            activebackground="#6272a4",
+            bd=0,
+            padx=6,
+            pady=3,
+            cursor="hand2",
+            command=self._player_toggle_loop,
+        )
+        self.btn_loop.pack(side="left", padx=3)
+
+        # Volume Slider
+        vol_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        vol_frame.pack(fill="x", padx=15, pady=(2, 0))
+
+        lbl_vol_icon = tk.Label(vol_frame, text="🔊", font=("Segoe UI", 9), bg="#1e1e2e", fg="#bd93f9")
+        lbl_vol_icon.pack(side="left", padx=(0, 4))
+
+        self.lbl_vol_val = tk.Label(vol_frame, text="80%", font=("Segoe UI", 8), bg="#1e1e2e", fg="#a6adc8", width=4)
+        self.lbl_vol_val.pack(side="right")
+
+        self.vol_slider = ttk.Scale(
+            vol_frame,
+            from_=0,
+            to=100,
+            orient="horizontal",
+            command=self._player_set_volume,
+        )
+        self.vol_slider.set(80)
+        self.vol_slider.pack(side="left", fill="x", expand=True)
 
     def _create_info_row(self, parent, label_text, default_value):
         frame = tk.Frame(parent, bg="#1e1e2e")
@@ -1057,11 +1371,34 @@ class JapaneseASMRApp(tk.Tk):
                 self.lbl_progress_status.config(text=f"Status: {status_text}")
         self.after(0, _apply)
 
+    def _paste_from_clipboard(self):
+        try:
+            clip_text = self.clipboard_get().strip()
+            if clip_text:
+                self.id_entry.delete(0, "end")
+                self.id_entry.insert(0, clip_text)
+                self.id_entry.config(fg="#50fa7b")
+                self._log(f"[i] Berhasil menempel dari clipboard: {clip_text[:40]}...")
+        except Exception as e:
+            self._log(f"[!] Gagal membaca clipboard: {e}")
+
     def _load_history_view(self):
-        """Memuat ulang tabel riwayat dari history.json."""
+        """Memuat ulang tabel riwayat dari history.json dan menghitung statistik koleksi."""
         self.hist_tree.delete(*self.hist_tree.get_children())
         histories = load_history()
+        total_size_bytes = 0
+        available_count = 0
+
         for idx, h in enumerate(histories):
+            fpath = h.get("output_path", "")
+            if os.path.exists(fpath):
+                try:
+                    fsize = os.path.getsize(fpath)
+                    total_size_bytes += fsize
+                    available_count += 1
+                except OSError:
+                    pass
+
             self.hist_tree.insert(
                 "",
                 "end",
@@ -1073,6 +1410,20 @@ class JapaneseASMRApp(tk.Tk):
                     h.get("file_size", "-"),
                 ),
             )
+
+        # Update Banner Statistik
+        if total_size_bytes >= 1024 * 1024 * 1024:
+            size_str = f"{total_size_bytes / (1024 * 1024 * 1024):.2f} GB"
+        else:
+            size_str = f"{total_size_bytes / (1024 * 1024):.1f} MB"
+
+        stats_text = (
+            f"📊 Total Koleksi: {len(histories)} Karya   |   "
+            f"💾 Total Penyimpanan: {size_str}   |   "
+            f"✅ File Tersedia di Disk: {available_count}/{len(histories)}"
+        )
+        if hasattr(self, "lbl_hist_stats"):
+            self.lbl_hist_stats.config(text=stats_text)
 
     def _on_history_select(self, event):
         selected = self.hist_tree.selection()
@@ -1132,6 +1483,25 @@ class JapaneseASMRApp(tk.Tk):
                     pass
 
             threading.Thread(target=load_online_cover, daemon=True).start()
+
+    def _play_history_in_player(self):
+        """Memutar file riwayat terpilih langsung di Tab Pemutar Audio."""
+        selected = self.hist_tree.selection()
+        if not selected:
+            return
+        idx = int(selected[0])
+        histories = load_history()
+        if idx < len(histories):
+            h = histories[idx]
+            file_path = h.get("output_path", "")
+            if not os.path.exists(file_path):
+                self._open_selected_history_file()
+                return
+
+            # Alihkan notebook ke Tab Player
+            self.notebook.select(self.tab_player)
+            self._refresh_playlist_view()
+            self._player_load_and_play(file_path, meta=h)
 
     def _open_selected_history_file(self):
         selected = self.hist_tree.selection()
@@ -1201,8 +1571,48 @@ class JapaneseASMRApp(tk.Tk):
 
     def _stop_downloads(self):
         self.stop_requested = True
-        self._log("[!] Meminta penghentian download...")
+        self._log("[!] Menghentikan proses download seketika...")
         self.stop_btn.config(state="disabled")
+
+        # 1. Kill subprocess aktif secara paksa beserta anak-anaknya (yt-dlp, aria2c, ffmpeg)
+        if self.current_process and self.current_process.poll() is None:
+            try:
+                if sys.platform == "win32":
+                    subprocess.run(
+                        ["taskkill", "/F", "/T", "/PID", str(self.current_process.pid)],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                else:
+                    self.current_process.kill()
+            except Exception:
+                pass
+            self.current_process = None
+
+        # 2. Pastikan process aria2c / yt-dlp / ffmpeg yatim dimatikan
+        if sys.platform == "win32":
+            for p_name in ["aria2c.exe", "yt-dlp.exe", "ffmpeg.exe"]:
+                try:
+                    subprocess.run(
+                        ["taskkill", "/F", "/IM", p_name],
+                        capture_output=True,
+                        creationflags=subprocess.CREATE_NO_WINDOW,
+                    )
+                except Exception:
+                    pass
+
+        # 3. Bersihkan sampah part & temp files di .cache/temp/
+        temp_dir = os.path.join(".cache", "temp")
+        if os.path.exists(temp_dir):
+            for fname in os.listdir(temp_dir):
+                fpath = os.path.join(temp_dir, fname)
+                try:
+                    if os.path.isfile(fpath):
+                        os.remove(fpath)
+                except OSError:
+                    pass
+
+        self._update_progress(0, "Download Dihentikan")
 
     def _download_worker(self):
         download_dir = get_download_dir()
@@ -1212,8 +1622,6 @@ class JapaneseASMRApp(tk.Tk):
 
         for idx, item in enumerate(self.queue_items):
             if self.stop_requested:
-                self._log("[!] Proses download dihentikan oleh pengguna.")
-                self._update_progress(0, "Download dihentikan")
                 break
 
             item_step = 100.0 / max(1, total_items)
@@ -1266,6 +1674,9 @@ class JapaneseASMRApp(tk.Tk):
                 else:
                     self._log(f"[i] Terdeteksi 1 track audio.")
 
+                if self.stop_requested:
+                    break
+
                 # 1. Download & Standardize Cover to JPEG (agar terbaca Windows Explorer)
                 self._update_progress(base_pct + item_step * 0.15, f"[{idx+1}/{total_items}] Mengunduh cover art...")
                 self._log("[1/3] Mengunduh cover art...")
@@ -1275,9 +1686,15 @@ class JapaneseASMRApp(tk.Tk):
                 with Image.open(io.BytesIO(img_bytes)) as pil_c:
                     pil_c.convert("RGB").save(temp_cover, "JPEG", quality=92)
 
+                if self.stop_requested:
+                    break
+
                 # 2. Download Semua Track Audio
                 downloaded_track_files = []
                 for t_idx, track_info in enumerate(tracks, start=1):
+                    if self.stop_requested:
+                        break
+
                     t_name = track_info["name"]
                     t_url = track_info["url"]
                     t_out_tmpl = os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.%(ext)s")
@@ -1307,11 +1724,14 @@ class JapaneseASMRApp(tk.Tk):
                         "--audio-format", "mp3",
                         "-o", t_out_tmpl,
                     ]
-                    subprocess.run(
+                    self.current_process = subprocess.Popen(
                         cmd_ytdlp,
-                        check=True,
                         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                     )
+                    self.current_process.wait()
+
+                    if self.stop_requested:
+                        break
 
                     # Deteksi file audio yang berhasil dibuat
                     possible_files = [
@@ -1325,6 +1745,9 @@ class JapaneseASMRApp(tk.Tk):
                     if not actual_file:
                         raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
                     downloaded_track_files.append(actual_file)
+
+                if self.stop_requested:
+                    break
 
                 # 3. Embed Thumbnail & Full Metadata ke MP3 (serta Concatenate jika Multi-track)
                 artist_val = item.get("cv", "")
@@ -1399,11 +1822,14 @@ class JapaneseASMRApp(tk.Tk):
                         final_output,
                     ]
 
-                subprocess.run(
+                self.current_process = subprocess.Popen(
                     cmd_ffmpeg,
-                    check=True,
                     creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                 )
+                self.current_process.wait()
+
+                if self.stop_requested:
+                    break
 
                 # Simpan ke riwayat unduhan & cache cover art
                 add_to_history(
@@ -1425,6 +1851,8 @@ class JapaneseASMRApp(tk.Tk):
                 self._log(f"[✓] SUKSES: Tersimpan di {os.path.basename(final_output)}")
 
             except Exception as e:
+                if self.stop_requested:
+                    break
                 item["status"] = "Error"
                 self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Error"))
                 self._log(f"[X] Gagal memproses {rjid}: {e}")
@@ -1438,11 +1866,269 @@ class JapaneseASMRApp(tk.Tk):
                             pass
 
         self.is_downloading = False
+        self.current_process = None
         self.start_btn.config(state="normal")
         self.stop_btn.config(state="disabled")
-        self._update_progress(100, "Semua proses selesai (100%)")
-        self._log("\n--- Semua proses download dalam antrean selesai ---")
-        self.after(0, lambda: show_dark_info(self, "Selesai", "Semua proses unduhan dalam antrean telah selesai!"))
+
+        if self.stop_requested:
+            self._log("[!] Semua proses download telah dihentikan.")
+            self._update_progress(0, "Download Dihentikan")
+            # Kembalikan item yang statusnya masih Downloading ke Pending
+            for idx, item in enumerate(self.queue_items):
+                if item["status"] == "Downloading":
+                    item["status"] = "Pending"
+                    self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Pending"))
+        else:
+            self._update_progress(100, "Semua proses selesai (100%)")
+            self._log("\n--- Semua proses download dalam antrean selesai ---")
+            self.after(0, lambda: show_dark_info(self, "Selesai", "Semua proses unduhan dalam antrean telah selesai!"))
+
+    # ==========================================
+    # PEMUTAR AUDIO BAWAAN (WINDOWS NATIVE MCI)
+    # ==========================================
+    def _mci_send(self, command):
+        if sys.platform != "win32":
+            return 0, ""
+        buf = ctypes.create_unicode_buffer(256)
+        err = ctypes.windll.winmm.mciSendStringW(command, buf, 255, 0)
+        return err, buf.value
+
+    def _refresh_playlist_view(self):
+        """Memuat ulang daftar audio yang tersedia di riwayat/folder untuk dimainkan."""
+        self.player_tree.delete(*self.player_tree.get_children())
+        histories = load_history()
+        self.playlist_items = []
+
+        for h in histories:
+            fpath = h.get("output_path", "")
+            if os.path.exists(fpath):
+                self.playlist_items.append(h)
+                idx = len(self.playlist_items) - 1
+                self.player_tree.insert(
+                    "",
+                    "end",
+                    iid=str(idx),
+                    values=(
+                        h.get("rjid", "-"),
+                        h.get("title", "-"),
+                        h.get("cv", "-"),
+                        h.get("file_size", "-"),
+                    ),
+                )
+
+    def _on_playlist_select(self, event):
+        selected = self.player_tree.selection()
+        if not selected:
+            return
+        idx = int(selected[0])
+        if 0 <= idx < len(self.playlist_items):
+            item = self.playlist_items[idx]
+            self._render_player_cover(item.get("rjid", ""), item.get("cover_url", ""))
+
+    def _player_play_selected(self):
+        selected = self.player_tree.selection()
+        if not selected:
+            return
+        idx = int(selected[0])
+        if 0 <= idx < len(self.playlist_items):
+            self.current_track_index = idx
+            item = self.playlist_items[idx]
+            self._player_load_and_play(item.get("output_path", ""), meta=item)
+
+    def _player_load_and_play(self, file_path, meta=None):
+        if not os.path.exists(file_path):
+            show_dark_warning(self, "File Tidak Ditemukan", f"File audio tidak ditemukan:\n{file_path}")
+            return
+
+        self._player_stop()
+        short_path = os.path.abspath(file_path)
+        self._mci_send("close asmr_player")
+        err, _ = self._mci_send(f'open "{short_path}" type mpegvideo alias asmr_player')
+        if err != 0:
+            show_dark_error(self, "Gagal Memutar", "Format audio tidak dapat diputar oleh sistem MCI.")
+            return
+
+        self._mci_send("set asmr_player time format milliseconds")
+        _, len_str = self._mci_send("status asmr_player length")
+        try:
+            self.player_duration_ms = int(len_str)
+        except ValueError:
+            self.player_duration_ms = 0
+
+        self._mci_send("play asmr_player")
+        self.is_playing = True
+        self.is_paused = False
+        self.current_playing_file = file_path
+        self.current_playing_meta = meta or {}
+
+        # Set Volume default
+        self._player_set_volume(self.vol_slider.get())
+
+        # Update UI Meta & Controls
+        rjid = meta.get("rjid", "-") if meta else "-"
+        title = meta.get("title", os.path.basename(file_path)) if meta else os.path.basename(file_path)
+        cv = meta.get("cv", "-") if meta else "-"
+        circle = meta.get("circle", "-") if meta else "-"
+
+        self.lbl_p_now_title.config(text=f"[{rjid}] {title}")
+        self.lbl_p_now_sub.config(text=f"CV: {cv}  |  Circle: {circle}")
+        self.lbl_time_total.config(text=self._format_time(self.player_duration_ms))
+        self.btn_play_pause.config(text="❚❚ Jeda")
+
+        self._render_player_cover(rjid, meta.get("cover_url", "") if meta else "")
+        self._player_schedule_tick()
+
+    def _render_player_cover(self, rjid, cover_url):
+        cache_file = os.path.join(".cache", "covers", f"{rjid}.jpg")
+        if os.path.exists(cache_file):
+            try:
+                pil_img = Image.open(cache_file)
+                pil_img.thumbnail((290, 195))
+                self.player_preview_image = ImageTk.PhotoImage(pil_img)
+                self.player_canvas.delete("all")
+                self.player_canvas.create_image(145, 97, image=self.player_preview_image)
+                return
+            except Exception:
+                pass
+
+        if cover_url:
+            def load_cover():
+                try:
+                    req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
+                    with urllib.request.urlopen(req, timeout=5) as resp:
+                        img_data = resp.read()
+                    pil_img = Image.open(io.BytesIO(img_data))
+                    pil_img.thumbnail((290, 195))
+                    os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
+                    pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
+                    self.player_preview_image = ImageTk.PhotoImage(pil_img)
+                    self.player_canvas.delete("all")
+                    self.player_canvas.create_image(145, 97, image=self.player_preview_image)
+                except Exception:
+                    pass
+            threading.Thread(target=load_cover, daemon=True).start()
+
+    def _player_play_pause_toggle(self):
+        if not self.current_playing_file:
+            if self.playlist_items:
+                self.current_track_index = 0
+                item = self.playlist_items[0]
+                self._player_load_and_play(item.get("output_path", ""), meta=item)
+            return
+
+        if self.is_playing:
+            self._mci_send("pause asmr_player")
+            self.is_playing = False
+            self.is_paused = True
+            self.btn_play_pause.config(text="▶ Putar")
+        else:
+            self._mci_send("play asmr_player")
+            self.is_playing = True
+            self.is_paused = False
+            self.btn_play_pause.config(text="❚❚ Jeda")
+            self._player_schedule_tick()
+
+    def _player_stop(self):
+        self._mci_send("stop asmr_player")
+        self._mci_send("seek asmr_player to start")
+        self.is_playing = False
+        self.is_paused = False
+        self.btn_play_pause.config(text="▶ Putar")
+        self.timeline_slider.set(0)
+        self.lbl_time_cur.config(text="00:00")
+
+    def _on_slider_change(self, val):
+        if self.is_user_dragging_slider and self.player_duration_ms > 0:
+            cur_ms = int(float(val) * self.player_duration_ms / 100.0)
+            self.lbl_time_cur.config(text=self._format_time(cur_ms))
+
+    def _on_slider_release(self, event):
+        self.is_user_dragging_slider = False
+        if not self.current_playing_file or self.player_duration_ms <= 0:
+            return
+        target_pct = self.timeline_slider.get()
+        target_ms = int(float(target_pct) * self.player_duration_ms / 100.0)
+        self._mci_send(f"seek asmr_player to {target_ms}")
+        if self.is_playing:
+            self._mci_send("play asmr_player")
+
+    def _player_set_volume(self, val):
+        vol_pct = int(float(val))
+        if hasattr(self, "lbl_vol_val"):
+            self.lbl_vol_val.config(text=f"{vol_pct}%")
+        # MCI volume range: 0 sampai 1000
+        mci_vol = int(vol_pct * 10)
+        self._mci_send(f"setaudio asmr_player volume to {mci_vol}")
+
+    def _player_prev_track(self):
+        if not self.playlist_items:
+            return
+        if self.current_track_index > 0:
+            self.current_track_index -= 1
+        else:
+            self.current_track_index = len(self.playlist_items) - 1
+        item = self.playlist_items[self.current_track_index]
+        self._player_load_and_play(item.get("output_path", ""), meta=item)
+
+    def _player_next_track(self):
+        if not self.playlist_items:
+            return
+        if self.current_track_index < len(self.playlist_items) - 1:
+            self.current_track_index += 1
+        else:
+            self.current_track_index = 0
+        item = self.playlist_items[self.current_track_index]
+        self._player_load_and_play(item.get("output_path", ""), meta=item)
+
+    def _player_toggle_loop(self):
+        self.is_looping = not self.is_looping
+        if self.is_looping:
+            self.btn_loop.config(text="🔁 Loop: ON", fg="#50fa7b", bg="#282a36")
+        else:
+            self.btn_loop.config(text="🔁 Loop: OFF", fg="#a6adc8", bg="#44475a")
+
+    def _player_tick(self):
+        if not self.is_playing or not self.current_playing_file:
+            return
+
+        _, pos_str = self._mci_send("status asmr_player position")
+        _, mode_str = self._mci_send("status asmr_player mode")
+
+        try:
+            pos_ms = int(pos_str)
+        except ValueError:
+            pos_ms = 0
+
+        if not self.is_user_dragging_slider and self.player_duration_ms > 0:
+            pct = (pos_ms / self.player_duration_ms) * 100.0
+            self.timeline_slider.set(pct)
+            self.lbl_time_cur.config(text=self._format_time(pos_ms))
+
+        # Cek jika track selesai
+        if mode_str == "stopped" or (self.player_duration_ms > 0 and pos_ms >= self.player_duration_ms - 500):
+            if self.is_looping:
+                self._mci_send("seek asmr_player to start")
+                self._mci_send("play asmr_player")
+                self._player_schedule_tick()
+            else:
+                self._player_next_track()
+            return
+
+        self._player_schedule_tick()
+
+    def _player_schedule_tick(self):
+        if self.is_playing:
+            self.after(500, self._player_tick)
+
+    def _format_time(self, ms):
+        total_sec = max(0, int(ms / 1000))
+        mins = total_sec // 60
+        secs = total_sec % 60
+        hours = mins // 60
+        if hours > 0:
+            mins = mins % 60
+            return f"{hours:02d}:{mins:02d}:{secs:02d}"
+        return f"{mins:02d}:{secs:02d}"
 
 
 if __name__ == "__main__":
