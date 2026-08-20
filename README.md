@@ -1,87 +1,109 @@
-# 🎧 JapaneseASMR Downloader & Cover Art Embedder
+# JapaneseASMR Downloader & Audio Player
 
-Downloader audio HLS/M3U8 & Direct MP3 otomatis dengan penyemat cover art thumbnail, metadata ID3 lengkap, dan antarmuka Desktop GUI + CLI yang intuitif.
-
----
-
-## ✨ Fitur Utama
-
-- 🖼️ **Aplikasi Desktop GUI (`gui.py`)**:
-  - **Live Preview Cover Art**: Menampilkan gambar cover karya langsung di aplikasi.
-  - **Smart Scraper DLsite**: Otomatis mengekstrak **Judul Asli**, **Pengisi Suara (Multi-CV)**, **Circle / Brand**, **Genre / Tag**, dan **Rating Usia (R18 / All-Ages)**.
-  - **Dukungan Format Fleksibel**: Otomatis mendeteksi sumber audio baik via HLS Stream (`.m3u8`) maupun direct file (`.mp3`).
-  - **Tab Riwayat Unduhan**: Menyimpan daftar semua karya yang pernah didownload beserta cover, tanggal, ukuran, dan status ketersediaan file.
-  - **Offline Cover Cache**: Menyimpan thumbnail cover mini secara lokal di `.cache/covers/` sehingga riwayat dapat dimuat secara offline.
-  - **Custom Download Directory**: Bebas memilih lokasi folder penyimpanan di mana saja melalui tombol *Ganti Folder* (tersimpan di `config.json`).
-  - **Tabel Antrean Interaktif**: Memantau progres antrean unduhan secara multi-threading tanpa freeze.
-- 🚀 **Download Paralel Cepat**: Menggunakan `yt-dlp` dengan akselerasi 16 koneksi paralel via `aria2c`.
-- 🏷️ **Penyematan Metadata ID3 Lengkap**: Menyematkan cover thumbnail, judul, artist (CV), album (Circle), genre, dan comment rating ke file MP3 via `ffmpeg`.
-- 🔢 **Otomatisasi Kode RJ**: Cukup masukkan kode produk (misal: `RJ01673437`, `RJ278932`, dll).
-- 📦 **Batch Multi-Download**: Mendukung download banyak ID sekaligus dalam satu antrean.
-- ⏭️ **Auto-Skip**: Otomatis melewati file yang sudah pernah diunduh sebelumnya.
-- 🎨 **CLI Interaktif & Berwarna (`main.py`)**: Pilihan mode CLI yang cepat dan ringan dengan kode warna ANSI.
+Aplikasi desktop *all-in-one* modern untuk mengunduh audio JapaneseASMR, menggabungkan *multi-track* & bonus/omake secara otomatis, menyematkan *cover art* HD & metadata DLsite resmi ke dalam tag ID3 MP3, serta dilengkapi pemutar audio bawaan.
 
 ---
 
-## 🛠️ Prasyarat (Dependencies)
+## Fitur Utama
 
-Pastikan program-program berikut sudah terinstal di sistem Anda dan terdaftar di PATH:
+### 1. Antarmuka Desktop Modern (GUI)
+- **Desain Flat & Dark Theme**: Menggunakan palet warna elegan modern (Dracula / Catppuccin) yang bersih, profesional, dan nyaman di mata.
+- **Pratinjau Cover & Metadata Real-time**: Menampilkan gambar cover resolusi tinggi serta informasi karya dari DLsite resmi:
+  - Judul Lengkap Karya
+  - Pengisi Suara (*Multi-CV / Seiyuu*)
+  - Nama Lingkar Karya (*Circle / Maker*)
+  - Rating Usia (*All-Ages / R18*)
+  - Genre & Tag Karya
+- **Tabel Antrean Fleksibel**: Mendukung input banyak kode RJ sekaligus (misal: `RJ01673437`, `RJ278932`, atau tautan URL) dipisahkan oleh spasi atau koma.
+- **Penyimpanan Riwayat Koleksi**: Daftar riwayat karya yang pernah diunduh tersimpan secara otomatis, lengkap dengan statistik total koleksi, ukuran file di disk, dan cover thumbnail offline.
 
-1. **Python 3.8+**
-2. **Pillow** (untuk GUI): `pip install Pillow`
-3. **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**
-4. **[aria2](https://github.com/aria2/aria2)** (`aria2c`)
-5. **[ffmpeg](https://ffmpeg.org/)**
+### 2. Pemutar Audio Bawaan (*Native Player*)
+- **Pemutar Musik Terintegrasi**: Langsung mendengarkan karya yang baru saja diunduh atau dari daftar riwayat tanpa perlu membuka media player eksternal.
+- **Kontrol Interaktif**:
+  - *Timeline slider* interaktif (geser untuk lompat ke detik yang diinginkan).
+  - Kontrol Volume (0% – 100%).
+  - Tombol Navigasi: Putar / Jeda, Berhenti, Track Sebelumnya, dan Track Berikutnya.
+  - Mode Pemutaran Berulang (*Loop Track: ON/OFF*).
+
+### 3. Engine Unduhan Berkecepatan Tinggi
+- **Akselerasi Multi-Thread**: Memanfaatkan engine `yt-dlp` yang dipercepat dengan `aria2c` (16 koneksi simultan per segmen).
+- **Penggabungan Otomatis**: Otomatis menggabungkan multi-track HLS (`.m3u8`) maupun direct link (`.mp3`) menjadi satu file MP3 utuh.
+- **Penyematan Metadata ID3v2.3**: Menggunakan `ffmpeg` untuk menanamkan cover art JPEG, judul, artis (CV), album (Circle), genre, dan komentar langsung ke dalam file audio.
+- **Pembaruan Engine yt-dlp Mandiri**: Terdapat fitur pembaruan `yt-dlp` langsung di menu Pengaturan dengan pilihan channel **Stable** (rilis stabil resmi) atau **Nightly** (rilis harian fitur terbaru).
+
+### 4. Manajemen Penyimpanan & Pengaturan
+- **Ganti Folder Unduhan**: Bebas mengatur folder tujuan penyimpanan file audio.
+- **Manajemen Cache**: Pantau dan bersihkan cache gambar cover art (`.cache/covers/`) serta file partisi sementara (`.cache/temp/`) dalam sekali klik.
+- **Opsi Penamaan File**: Pilihan menggunakan kode RJ standar atau judul asli karya sebagai nama file MP3.
 
 ---
 
-## 🚀 Cara Penggunaan
+## Persyaratan Sistem
 
-Cukup jalankan file utama:
+Sebelum menjalankan aplikasi dari *source code*, pastikan komponen berikut telah terpasang:
+
+1. **Python 3.8+** (Disarankan Python 3.10 – 3.14)
+2. **Pillow** (Untuk manipulasi gambar GUI):
+   ```bash
+   pip install Pillow
+   ```
+3. **Binary Pendukung** (letakkan di folder `bin/` atau daftarkan di system `PATH`):
+   - **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**
+   - **[aria2c](https://github.com/aria2/aria2)**
+   - **[ffmpeg](https://ffmpeg.org/)**
+
+---
+
+## Cara Menjalankan
+
+### 1. Menjalankan Mode Desktop GUI (Utama)
 ```bash
 python main.py
 ```
 
-Pilih mode yang diinginkan:
-```text
-Silakan pilih mode yang ingin dijalankan:
-  [1] Mode Desktop GUI (Preview Cover, Antrean, & Riwayat)
-  [2] Mode Terminal CLI (Cepat & Ringan)
-  [0] Keluar
-
-Pilih mode [1/2] (Tekan Enter untuk GUI):
-```
-
-### Shortcut Flag (Opsional)
+### 2. Menjalankan Mode Terminal CLI
+Jika Anda ingin menggunakan versi CLI interaktif berbasis command-line:
 ```bash
-python main.py --gui   # Langsung membuka mode Desktop GUI
-python main.py --cli   # Langsung membuka mode Terminal CLI
+python cli.py
 ```
 
 ---
 
-### Versi Windows Batch (`main.bat`)
+## Kompilasi Executable & Installer (Windows)
 
-Sebagai cadangan, Anda juga dapat menjalankan:
+Project ini telah dilengkapi konfigurasi kompilasi binary C native via **Nuitka** dan pembuat installer via **Inno Setup**:
+
+### 1. Kompilasi Standalone Binary (`JapaneseASMR.exe`)
+Jalankan batch script build:
 ```cmd
-.\main.bat
+.\nuitka_build.bat
 ```
+Hasil executable mandiri tanpa console popup akan dibuat di dalam folder `dist/`.
+
+### 2. Membuat Setup Installer (`JapaneseASMR_Setup_v1.0.0.exe`)
+1. Buka file `installer_setup.iss` menggunakan **Inno Setup Compiler**.
+2. Klik tombol **Compile** (atau tekan `Ctrl + F9`).
+3. File setup installer siap pakai akan tersimpan di dalam folder `dist_installer/`.
 
 ---
 
-## 📁 Struktur Project
+## Struktur Direktori
 
 ```text
 japaneseasmr-dl/
-├── config_manager.py  # Modul manajemen konfigurasi & riwayat unduhan
-├── gui.py             # Aplikasi Desktop GUI (Dark Mode & Riwayat)
-├── main.py            # Menu utama & Mode Terminal CLI
-├── main.bat           # Script cadangan versi Windows Batch
-├── README.md          # Dokumentasi project
-└── downloads/         # Folder default penyimpanan file MP3
+├── assets/                # Aset ikon dan grafis (app_icon.ico, app_icon.png)
+├── bin/                   # Binary portabel (aria2c.exe, ffmpeg.exe, yt-dlp.exe)
+├── config_manager.py      # Modul manajemen konfigurasi, riwayat, & scraper DLsite
+├── gui.py                 # Modul antarmuka GUI Desktop, Player, & Settings
+├── main.py                # Entry-point utama Desktop GUI
+├── cli.py                 # Entry-point mandiri Terminal CLI
+├── nuitka_build.bat       # Script kompilasi Nuitka ke Windows Executable
+├── installer_setup.iss    # Script Inno Setup Compiler untuk installer Windows
+├── README.md              # Dokumentasi project
+└── downloads/             # Folder default penyimpanan hasil unduhan MP3
 ```
 
 ---
 
-## 📄 Lisensi
-[MIT License](LICENSE)
+## Lisensi
+Didistribusikan di bawah lisensi Open Source untuk penggunaan pribadi. Dibuat oleh **SayMaven**.

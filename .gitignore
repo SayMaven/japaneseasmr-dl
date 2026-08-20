@@ -28,3 +28,6 @@ bin/
 
 nuitka_build_cli.bat
 nuitka_build.bat
+dist_installer/
+
+installer_setup.iss

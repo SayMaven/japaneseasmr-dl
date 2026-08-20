@@ -28,7 +28,119 @@ DEFAULT_CONFIG = {
     "download_dir": "downloads",
     "use_detailed_filename": False,
     "default_id": "RJ01673437",
+    "connections": 16,
+    "notify_popup": True,
+    "auto_clipboard": False,
+    "ytdlp_channel": "stable",
 }
+
+
+def get_ytdlp_version():
+    """Mengambil versi yt-dlp yang terpasang."""
+    import subprocess
+    try:
+        res = subprocess.run(
+            ["yt-dlp", "--version"],
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            timeout=8,
+        )
+        if res.returncode == 0:
+            return res.stdout.strip()
+        return "Tidak diketahui"
+    except Exception:
+        return "Tidak ditemukan"
+
+
+def update_ytdlp_engine(channel="stable"):
+    """Memperbarui binary yt-dlp ke rilis stable atau nightly."""
+    import subprocess
+    target_channel = channel.strip().lower()
+    if target_channel not in ["stable", "nightly"]:
+        target_channel = "stable"
+
+    cmd = ["yt-dlp", "--update-to", target_channel]
+    try:
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            timeout=120,
+        )
+        out_msg = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
+        success = res.returncode == 0 or "up to date" in out_msg.lower() or "updated" in out_msg.lower()
+        return success, out_msg.strip()
+    except Exception as e:
+        return False, str(e)
+
+
+def get_dir_size_str(dir_path):
+    """Menghitung total ukuran file di dalam folder dalam format MB/KB."""
+    if not os.path.exists(dir_path):
+        return "0 KB"
+    total_bytes = 0
+    for root, _, files in os.walk(dir_path):
+        for f in files:
+            fp = os.path.join(root, f)
+            try:
+                total_bytes += os.path.getsize(fp)
+            except OSError:
+                pass
+    if total_bytes > 1024 * 1024:
+        return f"{total_bytes / (1024 * 1024):.2f} MB"
+    elif total_bytes > 1024:
+        return f"{total_bytes / 1024:.1f} KB"
+    else:
+        return f"{total_bytes} B"
+
+
+def get_cache_size_info():
+    """Mengembalikan statistik ukuran cache cover dan cache temp."""
+    covers_dir = os.path.join(".cache", "covers")
+    temp_dir = os.path.join(".cache", "temp")
+    
+    cover_files_count = len(os.listdir(covers_dir)) if os.path.exists(covers_dir) else 0
+    temp_files_count = len(os.listdir(temp_dir)) if os.path.exists(temp_dir) else 0
+
+    return {
+        "covers_size": get_dir_size_str(covers_dir),
+        "covers_count": cover_files_count,
+        "temp_size": get_dir_size_str(temp_dir),
+        "temp_count": temp_files_count,
+    }
+
+
+def clear_cover_cache():
+    """Menghapus semua file thumbnail cover di .cache/covers/."""
+    covers_dir = os.path.join(".cache", "covers")
+    if os.path.exists(covers_dir):
+        for f in os.listdir(covers_dir):
+            fp = os.path.join(covers_dir, f)
+            try:
+                if os.path.isfile(fp):
+                    os.remove(fp)
+            except OSError:
+                pass
+
+
+def clear_temp_cache():
+    """Menghapus semua file sementara/part di .cache/temp/."""
+    temp_dir = os.path.join(".cache", "temp")
+    if os.path.exists(temp_dir):
+        for f in os.listdir(temp_dir):
+            fp = os.path.join(temp_dir, f)
+            try:
+                if os.path.isfile(fp):
+                    os.remove(fp)
+            except OSError:
+                pass
+
+
+def clear_all_history():
+    """Mengosongkan history.json."""
+    save_history([])
 
 
 def load_config():

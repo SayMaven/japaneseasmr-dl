@@ -9,18 +9,25 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import urllib.request
+import webbrowser
 from PIL import Image, ImageTk
 
 from config_manager import (
     add_to_history,
     cache_cover_image,
+    clear_all_history,
+    clear_cover_cache,
+    clear_temp_cache,
     discover_all_audio_tracks,
+    get_cache_size_info,
     get_download_dir,
+    get_ytdlp_version,
     load_config,
     load_history,
     resolve_audio_url,
     save_config,
     set_download_dir,
+    update_ytdlp_engine,
 )
 
 REFERER = "https://japaneseasmr.com"
@@ -181,6 +188,841 @@ def show_dark_error(parent, title, message):
 
 def ask_dark_yesno(parent, title, message, confirm_text="Ya", cancel_text="Batal"):
     return InAppModal.show(parent, title, message, dialog_type="question", confirm_text=confirm_text, cancel_text=cancel_text)
+
+
+class SettingsDialog(tk.Toplevel):
+    """Dialog Pengaturan Modern dengan Sidebar Navigasi Vertikal (Kiri) dan Panel Konten (Kanan)."""
+    def __init__(self, parent):
+        super().__init__(parent)
+        self.parent = parent
+        self.title("Pengaturan - JapaneseASMR Downloader")
+        self.geometry("740x520")
+        self.minsize(700, 480)
+        self.configure(bg="#1e1e2e")
+        self.transient(parent)
+        apply_dark_titlebar(self)
+
+        self.parent._settings_dialog = self
+        self.protocol("WM_DELETE_WINDOW", self._on_dialog_close)
+
+        # Set Window Icon pada dialog
+        if hasattr(parent, "_icon_ico_path") and parent._icon_ico_path and os.path.exists(parent._icon_ico_path):
+            try:
+                self.iconbitmap(default=parent._icon_ico_path)
+            except Exception:
+                pass
+
+        # Posisikan dialog di tengah window parent
+        try:
+            parent.update_idletasks()
+            pw = parent.winfo_width()
+            ph = parent.winfo_height()
+            px = parent.winfo_x()
+            py = parent.winfo_y()
+            cx = px + (pw - 740) // 2
+            cy = py + (ph - 520) // 2
+            self.geometry(f"+{max(0, cx)}+{max(0, cy)}")
+        except Exception:
+            pass
+
+        self.cfg = load_config()
+
+        # Variable States
+        self.var_download_dir = tk.StringVar(value=self.cfg.get("download_dir", get_download_dir()))
+        self.var_detailed_name = tk.BooleanVar(value=self.cfg.get("use_detailed_filename", False))
+        self.var_notify_popup = tk.BooleanVar(value=self.cfg.get("notify_popup", True))
+        self.var_auto_clipboard = tk.BooleanVar(value=self.cfg.get("auto_clipboard", False))
+        self.var_connections = tk.IntVar(value=self.cfg.get("connections", 16))
+        self.var_ytdlp_channel = tk.StringVar(value=self.cfg.get("ytdlp_channel", "stable"))
+
+        self.nav_buttons = {}
+        self.current_tab = "general"
+
+        self._build_ui()
+        self._show_tab("general")
+
+    def _build_ui(self):
+        # 1. Header Bar Dialog
+        header_bar = tk.Frame(self, bg="#282a36", height=45)
+        header_bar.pack(fill="x", side="top")
+
+        lbl_header = tk.Label(
+            header_bar,
+            text="Pengaturan Aplikasi",
+            font=("Segoe UI", 12, "bold"),
+            bg="#282a36",
+            fg="#f8f8f2",
+            padx=16,
+            pady=10,
+        )
+        lbl_header.pack(side="left")
+
+        # 2. Main Body: Sidebar (Kiri) & Content Panel (Kanan)
+        body_frame = tk.Frame(self, bg="#1e1e2e")
+        body_frame.pack(fill="both", expand=True)
+
+        # Sidebar Kiri
+        self.sidebar = tk.Frame(body_frame, bg="#181825", width=180)
+        self.sidebar.pack(side="left", fill="y")
+        self.sidebar.pack_propagate(False)
+
+        lbl_menu = tk.Label(
+            self.sidebar,
+            text="KATEGORI",
+            font=("Segoe UI", 8, "bold"),
+            bg="#181825",
+            fg="#6272a4",
+            anchor="w",
+            padx=16,
+            pady=12,
+        )
+        lbl_menu.pack(fill="x")
+
+        # Tab Navigation Items
+        tabs = [
+            ("general", "Umum"),
+            ("download", "Unduhan & Jaringan"),
+            ("cache", "Penyimpanan & Cache"),
+            ("about", "Tentang Aplikasi"),
+        ]
+
+        for tab_id, label_text in tabs:
+            btn = tk.Button(
+                self.sidebar,
+                text=label_text,
+                font=("Segoe UI", 9, "bold"),
+                bg="#181825",
+                fg="#a6adc8",
+                activebackground="#282a36",
+                activeforeground="#f8f8f2",
+                anchor="w",
+                bd=0,
+                padx=16,
+                pady=10,
+                cursor="hand2",
+                command=lambda t=tab_id: self._show_tab(t),
+            )
+            btn.pack(fill="x")
+            self.nav_buttons[tab_id] = btn
+
+        # Content Panel Kanan
+        self.content_container = tk.Frame(body_frame, bg="#1e1e2e", padx=24, pady=16)
+        self.content_container.pack(side="right", fill="both", expand=True)
+
+        # 3. Footer Bar Dialog (Batal & Simpan)
+        footer_bar = tk.Frame(self, bg="#181825", height=52)
+        footer_bar.pack(fill="x", side="bottom")
+
+        btn_save = tk.Button(
+            footer_bar,
+            text="Simpan Pengaturan",
+            font=("Segoe UI", 9, "bold"),
+            bg="#50fa7b",
+            fg="#1e1e2e",
+            activebackground="#8be9fd",
+            bd=0,
+            padx=18,
+            pady=6,
+            cursor="hand2",
+            command=self._save_settings,
+        )
+        btn_save.pack(side="right", padx=16, pady=10)
+
+        btn_cancel = tk.Button(
+            footer_bar,
+            text="Batal",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#f8f8f2",
+            activebackground="#6272a4",
+            bd=0,
+            padx=16,
+            pady=6,
+            cursor="hand2",
+            command=self.destroy,
+        )
+        btn_cancel.pack(side="right", padx=(0, 8), pady=10)
+
+    def _show_tab(self, tab_name):
+        self.current_tab = tab_name
+
+        # Update styling sidebar buttons
+        for t_id, btn in self.nav_buttons.items():
+            if t_id == tab_name:
+                btn.config(bg="#282a36", fg="#bd93f9")
+            else:
+                btn.config(bg="#181825", fg="#a6adc8")
+
+        # Clear existing content
+        for child in self.content_container.winfo_children():
+            child.destroy()
+
+        if tab_name == "general":
+            self._render_general_tab()
+        elif tab_name == "download":
+            self._render_download_tab()
+        elif tab_name == "cache":
+            self._render_cache_tab()
+        elif tab_name == "about":
+            self._render_about_tab()
+
+    # ==================== TAB 1: UMUM ====================
+    def _render_general_tab(self):
+        lbl_title = tk.Label(
+            self.content_container,
+            text="Pengaturan Umum",
+            font=("Segoe UI", 12, "bold"),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        lbl_title.pack(fill="x", pady=(0, 14))
+
+        # Folder Simpan
+        lbl_dir = tk.Label(
+            self.content_container,
+            text="Lokasi Folder Penyimpanan Download:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_dir.pack(fill="x", pady=(4, 2))
+
+        dir_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        dir_box.pack(fill="x", pady=(0, 14))
+
+        ent_dir = tk.Entry(
+            dir_box,
+            textvariable=self.var_download_dir,
+            font=("Segoe UI", 9),
+            bg="#282a36",
+            fg="#f8f8f2",
+            insertbackground="#f8f8f2",
+            bd=1,
+            relief="solid",
+        )
+        ent_dir.pack(side="left", fill="x", expand=True, ipady=4, padx=(0, 8))
+
+        btn_browse = tk.Button(
+            dir_box,
+            text="Browse...",
+            font=("Segoe UI", 9),
+            bg="#6272a4",
+            fg="#f8f8f2",
+            activebackground="#bd93f9",
+            bd=0,
+            padx=12,
+            pady=3,
+            cursor="hand2",
+            command=self._browse_dir,
+        )
+        btn_browse.pack(side="right")
+
+        # Separator
+        sep1 = tk.Frame(self.content_container, bg="#313244", height=1)
+        sep1.pack(fill="x", pady=8)
+
+        # Format Penamaan File
+        lbl_name_opt = tk.Label(
+            self.content_container,
+            text="Format & Perilaku:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_name_opt.pack(fill="x", pady=(4, 6))
+
+        chk_name = tk.Checkbutton(
+            self.content_container,
+            text="Gunakan Judul Asli Karya sebagai Nama File MP3 (contoh: [RJ01673437] Judul.mp3)",
+            variable=self.var_detailed_name,
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            anchor="w",
+        )
+        chk_name.pack(fill="x", pady=4)
+
+        chk_notify = tk.Checkbutton(
+            self.content_container,
+            text="Tampilkan Kotak Dialog Notifikasi Pop-up saat Semua Unduhan Selesai",
+            variable=self.var_notify_popup,
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            anchor="w",
+        )
+        chk_notify.pack(fill="x", pady=4)
+
+        chk_clip = tk.Checkbutton(
+            self.content_container,
+            text="Deteksi Otomatis Kode RJ dari Clipboard saat Tombol Tempel Ditekan",
+            variable=self.var_auto_clipboard,
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            anchor="w",
+        )
+        chk_clip.pack(fill="x", pady=4)
+
+    def _browse_dir(self):
+        new_d = filedialog.askdirectory(initialdir=self.var_download_dir.get(), title="Pilih Folder Download")
+        if new_d:
+            self.var_download_dir.set(new_d)
+
+    # ==================== TAB 2: UNDUHAN ====================
+    def _render_download_tab(self):
+        lbl_title = tk.Label(
+            self.content_container,
+            text="Pengaturan Unduhan & Jaringan",
+            font=("Segoe UI", 12, "bold"),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        lbl_title.pack(fill="x", pady=(0, 14))
+
+        # Jumlah Koneksi Paralel
+        lbl_conn = tk.Label(
+            self.content_container,
+            text="Jumlah Koneksi Simultan per Track (Aria2c Multi-thread):",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_conn.pack(fill="x", pady=(4, 2))
+
+        conn_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        conn_box.pack(fill="x", pady=(0, 10))
+
+        spn_conn = ttk.Spinbox(
+            conn_box,
+            from_=1,
+            to=32,
+            textvariable=self.var_connections,
+            font=("Segoe UI", 9),
+            width=8,
+        )
+        spn_conn.pack(side="left", padx=(0, 10))
+
+        lbl_conn_hint = tk.Label(
+            conn_box,
+            text="Koneksi paralel (Default: 16). Semakin tinggi koneksi, unduhan semakin cepat.",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#6272a4",
+        )
+        lbl_conn_hint.pack(side="left")
+
+        # Separator
+        sep1 = tk.Frame(self.content_container, bg="#313244", height=1)
+        sep1.pack(fill="x", pady=10)
+
+        # Pembaruan Engine yt-dlp Section
+        lbl_upd_head = tk.Label(
+            self.content_container,
+            text="Pembaruan Engine yt-dlp:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_upd_head.pack(fill="x", pady=(0, 6))
+
+        ytdlp_card = tk.Frame(self.content_container, bg="#282a36", padx=14, pady=10)
+        ytdlp_card.pack(fill="x", pady=(0, 10))
+
+        # Cek versi yt-dlp secara non-blocking di background agar UI tidak freeze
+        init_ver_text = getattr(self, "_cached_ytdlp_ver", None) or "Memuat versi..."
+        self.lbl_ytdlp_ver = tk.Label(
+            ytdlp_card,
+            text=f"Versi Terpasang: {init_ver_text}",
+            font=("Segoe UI", 9, "bold"),
+            bg="#282a36",
+            fg="#50fa7b",
+            anchor="w",
+        )
+        self.lbl_ytdlp_ver.pack(fill="x", pady=(0, 6))
+
+        def _async_load_ver():
+            ver = get_ytdlp_version()
+            self._cached_ytdlp_ver = ver
+            if self.winfo_exists() and hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
+                self.after(0, lambda: self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {ver}"))
+
+        threading.Thread(target=_async_load_ver, daemon=True).start()
+
+        # Channel Selector (Stable vs Nightly)
+        chan_row = tk.Frame(ytdlp_card, bg="#282a36")
+        chan_row.pack(fill="x", pady=(0, 8))
+
+        lbl_chan = tk.Label(
+            chan_row,
+            text="Channel Rilis:",
+            font=("Segoe UI", 8, "bold"),
+            bg="#282a36",
+            fg="#cdd6f4",
+        )
+        lbl_chan.pack(side="left", padx=(0, 12))
+
+        rb_stable = tk.Radiobutton(
+            chan_row,
+            text="Stable (Rilis Stabil)",
+            variable=self.var_ytdlp_channel,
+            value="stable",
+            font=("Segoe UI", 8),
+            bg="#282a36",
+            fg="#f8f8f2",
+            selectcolor="#181825",
+            activebackground="#282a36",
+            activeforeground="#50fa7b",
+        )
+        rb_stable.pack(side="left", padx=(0, 12))
+
+        rb_nightly = tk.Radiobutton(
+            chan_row,
+            text="Nightly (Rilis Harian / Fitur Terbaru)",
+            variable=self.var_ytdlp_channel,
+            value="nightly",
+            font=("Segoe UI", 8),
+            bg="#282a36",
+            fg="#f8f8f2",
+            selectcolor="#181825",
+            activebackground="#282a36",
+            activeforeground="#bd93f9",
+        )
+        rb_nightly.pack(side="left")
+
+        # Tombol Update & Status
+        upd_action_row = tk.Frame(ytdlp_card, bg="#282a36")
+        upd_action_row.pack(fill="x")
+
+        self.btn_update_ytdlp = tk.Button(
+            upd_action_row,
+            text="Perbarui yt-dlp Sekarang",
+            font=("Segoe UI", 8, "bold"),
+            bg="#bd93f9",
+            fg="#1e1e2e",
+            activebackground="#ff79c6",
+            bd=0,
+            padx=14,
+            pady=4,
+            cursor="hand2",
+            command=self._do_update_ytdlp,
+        )
+        self.btn_update_ytdlp.pack(side="left", padx=(0, 10))
+
+        self.lbl_ytdlp_status = tk.Label(
+            upd_action_row,
+            text="Siap memeriksa pembaruan",
+            font=("Segoe UI", 8),
+            bg="#282a36",
+            fg="#a6adc8",
+        )
+        self.lbl_ytdlp_status.pack(side="left")
+
+    def _do_update_ytdlp(self):
+        """Menjalankan proses update yt-dlp di background thread."""
+        channel = self.var_ytdlp_channel.get()
+        self.btn_update_ytdlp.config(state="disabled")
+        self.lbl_ytdlp_status.config(text=f"Sedang memperbarui yt-dlp ({channel})...", fg="#bd93f9")
+
+        def run_upd():
+            success, msg = update_ytdlp_engine(channel=channel)
+            new_ver = get_ytdlp_version()
+
+            def done():
+                self.btn_update_ytdlp.config(state="normal")
+                self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {new_ver}")
+                if success:
+                    self.lbl_ytdlp_status.config(text=f"Sukses! Versi {new_ver}", fg="#50fa7b")
+                    show_dark_info(
+                        self,
+                        "Pembaruan yt-dlp Selesai",
+                        f"Proses pembaruan yt-dlp (Channel: {channel}) telah selesai.\n\nVersi saat ini: {new_ver}\n\nLog output:\n{msg}",
+                    )
+                else:
+                    self.lbl_ytdlp_status.config(text="Gagal memperbarui", fg="#ff5555")
+                    show_dark_error(
+                        self,
+                        "Pembaruan Gagal",
+                        f"Gagal memperbarui yt-dlp:\n\n{msg}",
+                    )
+
+            self.after(0, done)
+
+        threading.Thread(target=run_upd, daemon=True).start()
+
+    # ==================== TAB 3: CACHE & DATA ====================
+    def _render_cache_tab(self):
+        lbl_title = tk.Label(
+            self.content_container,
+            text="Penyimpanan Cache & Data",
+            font=("Segoe UI", 12, "bold"),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        lbl_title.pack(fill="x", pady=(0, 14))
+
+        stats = get_cache_size_info()
+        histories = load_history()
+
+        # Kartu Statistik Cache
+        card_cache = tk.Frame(self.content_container, bg="#282a36", padx=14, pady=12)
+        card_cache.pack(fill="x", pady=(0, 14))
+
+        self.lbl_cover_stat = tk.Label(
+            card_cache,
+            text=f"Cache Cover Art     : {stats['covers_count']} file ({stats['covers_size']})",
+            font=("Segoe UI", 9),
+            bg="#282a36",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        self.lbl_cover_stat.pack(fill="x", pady=2)
+
+        self.lbl_temp_stat = tk.Label(
+            card_cache,
+            text=f"File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})",
+            font=("Segoe UI", 9),
+            bg="#282a36",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        self.lbl_temp_stat.pack(fill="x", pady=2)
+
+        self.lbl_hist_stat = tk.Label(
+            card_cache,
+            text=f"Riwayat Unduhan      : {len(histories)} karya tersimpan",
+            font=("Segoe UI", 9),
+            bg="#282a36",
+            fg="#f8f8f2",
+            anchor="w",
+        )
+        self.lbl_hist_stat.pack(fill="x", pady=2)
+
+        # Tombol Aksi Pembersihan
+        btn_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        btn_box.pack(fill="x", pady=4)
+
+        btn_clear_covers = tk.Button(
+            btn_box,
+            text="Bersihkan Cache Cover",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#8be9fd",
+            activebackground="#6272a4",
+            bd=0,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=self._do_clear_covers,
+        )
+        btn_clear_covers.pack(side="left", padx=(0, 8))
+
+        btn_clear_temp = tk.Button(
+            btn_box,
+            text="Bersihkan File Sampah",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#50fa7b",
+            activebackground="#6272a4",
+            bd=0,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=self._do_clear_temp,
+        )
+        btn_clear_temp.pack(side="left", padx=(0, 8))
+
+        btn_clear_hist = tk.Button(
+            btn_box,
+            text="Hapus Semua Riwayat",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#ff5555",
+            activebackground="#6272a4",
+            bd=0,
+            padx=12,
+            pady=6,
+            cursor="hand2",
+            command=self._do_clear_history,
+        )
+        btn_clear_hist.pack(side="left")
+
+    def _do_clear_covers(self):
+        clear_cover_cache()
+        stats = get_cache_size_info()
+        self.lbl_cover_stat.config(text=f"Cache Cover Art     : {stats['covers_count']} file ({stats['covers_size']})")
+        show_dark_info(self, "Berhasil", "Cache gambar cover art telah dibersihkan!")
+
+    def _do_clear_temp(self):
+        clear_temp_cache()
+        stats = get_cache_size_info()
+        self.lbl_temp_stat.config(text=f"File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})")
+        show_dark_info(self, "Berhasil", "Semua file sementara/temp telah dibersihkan!")
+
+    def _do_clear_history(self):
+        if ask_dark_yesno(self, "Konfirmasi", "Apakah Anda yakin ingin menghapus seluruh riwayat unduhan? (File MP3 di folder simpan tidak akan terhapus)."):
+            clear_all_history()
+            self.lbl_hist_stat.config(text="Riwayat Unduhan      : 0 karya tersimpan")
+            self.parent._load_history_view()
+            show_dark_info(self, "Berhasil", "Seluruh riwayat unduhan telah dikosongkan!")
+
+    # ==================== TAB 4: ABOUT ====================
+    def _render_about_tab(self):
+        card_about = tk.Frame(self.content_container, bg="#1e1e2e")
+        card_about.pack(fill="both", expand=True)
+
+        # Header About
+        top_row = tk.Frame(card_about, bg="#1e1e2e")
+        top_row.pack(fill="x", pady=(0, 10))
+
+        # Render Icon App jika ada
+        if hasattr(self.parent, "_icon_png_path") and self.parent._icon_png_path and os.path.exists(self.parent._icon_png_path):
+            try:
+                with Image.open(self.parent._icon_png_path) as p_img:
+                    resized = p_img.resize((64, 64), Image.Resampling.LANCZOS)
+                    self._about_logo_img = ImageTk.PhotoImage(resized)
+                    lbl_logo = tk.Label(top_row, image=self._about_logo_img, bg="#1e1e2e")
+                    lbl_logo.pack(side="left", padx=(0, 14))
+            except Exception:
+                pass
+
+        title_box = tk.Frame(top_row, bg="#1e1e2e")
+        title_box.pack(side="left", fill="x")
+
+        lbl_app_name = tk.Label(
+            title_box,
+            text="JapaneseASMR Downloader",
+            font=("Segoe UI", 14, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+            anchor="w",
+        )
+        lbl_app_name.pack(fill="x")
+
+        lbl_version = tk.Label(
+            title_box,
+            text="Versi 1.0.0 (Release Build) • Windows Edition",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#bd93f9",
+            anchor="w",
+        )
+        lbl_version.pack(fill="x")
+
+        lbl_desc = tk.Label(
+            card_about,
+            text="Aplikasi desktop all-in-one untuk mengunduh audio JapaneseASMR, menggabungkan multi-track & omake/EX secara otomatis, menyematkan cover art JPEG & metadata DLsite lengkap, serta dilengkapi pemutar audio bawaan.",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            wraplength=480,
+            justify="left",
+            anchor="w",
+        )
+        lbl_desc.pack(fill="x", pady=(4, 12))
+
+        # Developer & Tech Credits Card
+        credit_card = tk.Frame(card_about, bg="#282a36", padx=14, pady=10)
+        credit_card.pack(fill="x", pady=(0, 14))
+
+        tk.Label(credit_card, text="Pengembang : SayMaven", font=("Segoe UI", 9, "bold"), bg="#282a36", fg="#f8f8f2", anchor="w").pack(fill="x", pady=1)
+        tk.Label(credit_card, text="Teknologi   : Python 3.14, Tkinter, FFmpeg, yt-dlp, Aria2c, Nuitka C Engine", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
+        tk.Label(credit_card, text="Lisensi     : Open Source Software (Free for Personal Use)", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
+
+        # Action Link Buttons
+        link_box = tk.Frame(card_about, bg="#1e1e2e")
+        link_box.pack(fill="x")
+
+        btn_gh = tk.Button(
+            link_box,
+            text="Buka Repository GitHub",
+            font=("Segoe UI", 9, "bold"),
+            bg="#6272a4",
+            fg="#f8f8f2",
+            activebackground="#bd93f9",
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl"),
+        )
+        btn_gh.pack(side="left", padx=(0, 10))
+
+        btn_issue = tk.Button(
+            link_box,
+            text="Laporkan Bug & Fitur",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#8be9fd",
+            activebackground="#6272a4",
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl/issues"),
+        )
+        btn_issue.pack(side="left")
+
+    def _do_clear_covers(self):
+        clear_cover_cache()
+        stats = get_cache_size_info()
+        self.lbl_cover_stat.config(text=f"🖼️ Cache Cover Art     : {stats['covers_count']} gambar ({stats['covers_size']})")
+        show_dark_info(self, "Berhasil", "Cache gambar cover art telah dibersihkan!")
+
+    def _do_clear_temp(self):
+        clear_temp_cache()
+        stats = get_cache_size_info()
+        self.lbl_temp_stat.config(text=f"🧹 File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})")
+        show_dark_info(self, "Berhasil", "Semua file sementara/temp telah dibersihkan!")
+
+    def _do_clear_history(self):
+        if ask_dark_yesno(self, "Konfirmasi", "Apakah Anda yakin ingin menghapus seluruh riwayat unduhan? (File MP3 di folder simpan tidak akan terhapus)."):
+            clear_all_history()
+            self.lbl_hist_stat.config(text="📜 Riwayat Unduhan      : 0 karya tersimpan")
+            self.parent._load_history_view()
+            show_dark_info(self, "Berhasil", "Seluruh riwayat unduhan telah dikosongkan!")
+
+    # ==================== TAB 4: ABOUT ====================
+    def _render_about_tab(self):
+        card_about = tk.Frame(self.content_container, bg="#1e1e2e")
+        card_about.pack(fill="both", expand=True)
+
+        # Header About
+        top_row = tk.Frame(card_about, bg="#1e1e2e")
+        top_row.pack(fill="x", pady=(0, 10))
+
+        # Render Icon App jika ada
+        if hasattr(self.parent, "_icon_png_path") and self.parent._icon_png_path and os.path.exists(self.parent._icon_png_path):
+            try:
+                with Image.open(self.parent._icon_png_path) as p_img:
+                    resized = p_img.resize((64, 64), Image.Resampling.LANCZOS)
+                    self._about_logo_img = ImageTk.PhotoImage(resized)
+                    lbl_logo = tk.Label(top_row, image=self._about_logo_img, bg="#1e1e2e")
+                    lbl_logo.pack(side="left", padx=(0, 14))
+            except Exception:
+                pass
+
+        title_box = tk.Frame(top_row, bg="#1e1e2e")
+        title_box.pack(side="left", fill="x")
+
+        lbl_app_name = tk.Label(
+            title_box,
+            text="JapaneseASMR Downloader",
+            font=("Segoe UI", 14, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+            anchor="w",
+        )
+        lbl_app_name.pack(fill="x")
+
+        lbl_version = tk.Label(
+            title_box,
+            text="Versi 1.0.0 (Release Build) • Windows Edition",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#bd93f9",
+            anchor="w",
+        )
+        lbl_version.pack(fill="x")
+
+        lbl_desc = tk.Label(
+            card_about,
+            text="Aplikasi desktop all-in-one untuk mengunduh audio JapaneseASMR, menggabungkan multi-track & omake/EX secara otomatis, menyematkan cover art JPEG & metadata DLsite lengkap, serta dilengkapi pemutar audio bawaan.",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            wraplength=480,
+            justify="left",
+            anchor="w",
+        )
+        lbl_desc.pack(fill="x", pady=(4, 12))
+
+        # Developer & Tech Credits Card
+        credit_card = tk.Frame(card_about, bg="#282a36", padx=14, pady=10)
+        credit_card.pack(fill="x", pady=(0, 14))
+
+        tk.Label(credit_card, text="👤 Pengembang : SayMaven", font=("Segoe UI", 9, "bold"), bg="#282a36", fg="#f8f8f2", anchor="w").pack(fill="x", pady=1)
+        tk.Label(credit_card, text="⚙️ Teknologi   : Python 3.14, Tkinter, FFmpeg, yt-dlp, Aria2c, Nuitka C Engine", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
+        tk.Label(credit_card, text="📜 Lisensi     : Open Source Software (Free for Personal Use)", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
+
+        # Action Link Buttons
+        link_box = tk.Frame(card_about, bg="#1e1e2e")
+        link_box.pack(fill="x")
+
+        btn_gh = tk.Button(
+            link_box,
+            text="🌐 Buka Repository GitHub",
+            font=("Segoe UI", 9, "bold"),
+            bg="#6272a4",
+            fg="#f8f8f2",
+            activebackground="#bd93f9",
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl"),
+        )
+        btn_gh.pack(side="left", padx=(0, 10))
+
+        btn_issue = tk.Button(
+            link_box,
+            text="🐛 Laporkan Bug / Fitur",
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#8be9fd",
+            activebackground="#6272a4",
+            bd=0,
+            padx=14,
+            pady=6,
+            cursor="hand2",
+            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl/issues"),
+        )
+        btn_issue.pack(side="left")
+
+    # ==================== SIMPAN PENGATURAN ====================
+    def _save_settings(self):
+        new_dir = self.var_download_dir.get().strip()
+        if not new_dir:
+            show_dark_warning(self, "Peringatan", "Lokasi folder download tidak boleh kosong.")
+            return
+
+        self.cfg["download_dir"] = new_dir
+        self.cfg["use_detailed_filename"] = self.var_detailed_name.get()
+        self.cfg["notify_popup"] = self.var_notify_popup.get()
+        self.cfg["auto_clipboard"] = self.var_auto_clipboard.get()
+        self.cfg["connections"] = max(1, min(32, self.var_connections.get()))
+        self.cfg["ytdlp_channel"] = self.var_ytdlp_channel.get()
+
+        save_config(self.cfg)
+        set_download_dir(new_dir)
+
+        # Sinkronisasi ke GUI utama
+        self.parent.opt_detailed_name.set(self.cfg["use_detailed_filename"])
+        self.parent.lbl_current_dir.config(text=f"Lokasi Simpan: {os.path.abspath(new_dir)}")
+
+        show_dark_info(self, "Tersimpan", "Semua pengaturan berhasil disimpan dan diterapkan!")
+        self._on_dialog_close()
+
+    def _on_dialog_close(self):
+        if hasattr(self, "parent") and self.parent:
+            self.parent._settings_dialog = None
+        self.destroy()
 
 
 def sanitize_filename(name):
@@ -373,12 +1215,15 @@ class JapaneseASMRApp(tk.Tk):
         self.player_preview_image = None
 
         # Set Window & Taskbar Icon
+        self._settings_dialog = None
         self._setup_app_icons()
 
         self._init_styles()
         self._build_ui()
         self._load_history_view()
         self._refresh_playlist_view()
+
+        self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
         # Re-apply icon setelah window di-render sempurna oleh Windows DWM
         if sys.platform == "win32":
@@ -533,19 +1378,19 @@ class JapaneseASMRApp(tk.Tk):
         )
         title_label.pack(side="left", padx=20, pady=12)
 
-        # Directory Selector & Open Folder Buttons
+        # Directory Selector, Open Folder, & Settings Buttons
         dir_controls = tk.Frame(header_frame, bg="#282a36")
         dir_controls.pack(side="right", padx=20, pady=10)
 
         change_dir_btn = tk.Button(
             dir_controls,
-            text="📁 Ganti Folder",
+            text="Ganti Folder",
             font=("Segoe UI", 9, "bold"),
             bg="#bd93f9",
             fg="#1e1e2e",
             activebackground="#ff79c6",
             bd=0,
-            padx=10,
+            padx=12,
             pady=5,
             cursor="hand2",
             command=self._change_download_dir,
@@ -554,26 +1399,42 @@ class JapaneseASMRApp(tk.Tk):
 
         open_folder_btn = tk.Button(
             dir_controls,
-            text="📂 Buka Folder",
+            text="Buka Folder",
             font=("Segoe UI", 9, "bold"),
             bg="#44475a",
             fg="#8be9fd",
             activebackground="#6272a4",
             activeforeground="#ffffff",
             bd=0,
-            padx=10,
+            padx=12,
             pady=5,
             cursor="hand2",
             command=self._open_downloads_folder,
         )
-        open_folder_btn.pack(side="left")
+        open_folder_btn.pack(side="left", padx=(0, 8))
+
+        settings_btn = tk.Button(
+            dir_controls,
+            text="Pengaturan",
+            font=("Segoe UI", 9, "bold"),
+            bg="#6272a4",
+            fg="#f8f8f2",
+            activebackground="#bd93f9",
+            activeforeground="#1e1e2e",
+            bd=0,
+            padx=12,
+            pady=5,
+            cursor="hand2",
+            command=self._open_settings_dialog,
+        )
+        settings_btn.pack(side="left")
 
         # Bar status folder simpan
         dir_bar = tk.Frame(self, bg="#181825", height=26)
         dir_bar.pack(fill="x", side="top")
         self.lbl_current_dir = tk.Label(
             dir_bar,
-            text=f"📁 Lokasi Simpan: {os.path.abspath(get_download_dir())}",
+            text=f"Lokasi Simpan: {os.path.abspath(get_download_dir())}",
             font=("Segoe UI", 8),
             bg="#181825",
             fg="#a6adc8",
@@ -587,15 +1448,15 @@ class JapaneseASMRApp(tk.Tk):
 
         # Tab 1: Download & Antrean
         self.tab_queue = tk.Frame(self.notebook, bg="#1e1e2e")
-        self.notebook.add(self.tab_queue, text=" 📥 Antrean Download ")
+        self.notebook.add(self.tab_queue, text=" Antrean Download ")
 
         # Tab 2: Riwayat Unduhan
         self.tab_history = tk.Frame(self.notebook, bg="#1e1e2e")
-        self.notebook.add(self.tab_history, text=" 📜 Riwayat Unduhan ")
+        self.notebook.add(self.tab_history, text=" Riwayat Unduhan ")
 
         # Tab 3: Pemutar Audio Bawaan
         self.tab_player = tk.Frame(self.notebook, bg="#1e1e2e")
-        self.notebook.add(self.tab_player, text=" 🎵 Pemutar Audio ")
+        self.notebook.add(self.tab_player, text=" Pemutar Audio ")
 
         self.notebook.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
@@ -611,12 +1472,16 @@ class JapaneseASMRApp(tk.Tk):
             self._refresh_playlist_view()
 
     def _build_queue_tab(self):
-        main_container = self.tab_queue
+        container = self.tab_queue
+
+        # Layout 2 Kolom: Kiri (Input & Tabel), Kanan (Cover & Info Detail)
+        main_container = tk.Frame(container, bg="#1e1e2e")
+        main_container.pack(fill="both", expand=True)
 
         left_panel = tk.Frame(main_container, bg="#1e1e2e")
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10), pady=10)
 
-        # 1. Input Box Frame
+        # 1. Baris Input & Tombol Tambah
         input_frame = tk.LabelFrame(
             left_panel,
             text=" Input Kode RJ / URL ",
@@ -659,14 +1524,14 @@ class JapaneseASMRApp(tk.Tk):
 
         paste_btn = tk.Button(
             input_inner,
-            text="📋 Tempel",
+            text="Tempel",
             font=("Segoe UI", 9, "bold"),
             bg="#44475a",
             fg="#8be9fd",
             activebackground="#6272a4",
             activeforeground="#ffffff",
             bd=0,
-            padx=10,
+            padx=12,
             pady=4,
             cursor="hand2",
             command=self._paste_from_clipboard,
@@ -675,13 +1540,13 @@ class JapaneseASMRApp(tk.Tk):
 
         add_btn = tk.Button(
             input_inner,
-            text="➕ Tambah ke Antrean",
+            text="Tambah ke Antrean",
             font=("Segoe UI", 9, "bold"),
             bg="#bd93f9",
             fg="#1e1e2e",
             activebackground="#ff79c6",
             bd=0,
-            padx=12,
+            padx=14,
             pady=4,
             cursor="hand2",
             command=self._add_to_queue,
@@ -744,13 +1609,13 @@ class JapaneseASMRApp(tk.Tk):
 
         self.start_btn = tk.Button(
             btn_action_frame,
-            text="▶️ Mulai Download",
+            text="Mulai Download",
             font=("Segoe UI", 10, "bold"),
             bg="#50fa7b",
             fg="#1e1e2e",
             activebackground="#8be9fd",
             bd=0,
-            padx=16,
+            padx=18,
             pady=6,
             cursor="hand2",
             command=self._start_download_thread,
@@ -759,13 +1624,13 @@ class JapaneseASMRApp(tk.Tk):
 
         self.stop_btn = tk.Button(
             btn_action_frame,
-            text="⏹️ Berhenti",
+            text="Berhenti",
             font=("Segoe UI", 10, "bold"),
             bg="#ff5555",
             fg="#ffffff",
             activebackground="#ff6e6e",
             bd=0,
-            padx=14,
+            padx=16,
             pady=6,
             state="disabled",
             cursor="hand2",
@@ -775,13 +1640,13 @@ class JapaneseASMRApp(tk.Tk):
 
         clear_btn = tk.Button(
             btn_action_frame,
-            text="🗑️ Bersihkan Antrean",
+            text="Bersihkan Antrean",
             font=("Segoe UI", 9),
             bg="#44475a",
             fg="#f8f8f2",
             activebackground="#6272a4",
             bd=0,
-            padx=12,
+            padx=14,
             pady=6,
             cursor="hand2",
             command=self._clear_queue,
@@ -878,41 +1743,41 @@ class JapaneseASMRApp(tk.Tk):
         info_inner = tk.Frame(right_panel, bg="#1e1e2e")
         info_inner.pack(fill="both", expand=True, padx=12, pady=3)
 
-        self.lbl_id = self._create_info_row(info_inner, "Kode RJ", "-")
-        self.lbl_title = self._create_info_row(info_inner, "Judul", "-")
-        self.lbl_cv = self._create_info_row(info_inner, "CV / Seiyuu", "-")
-        self.lbl_circle = self._create_info_row(info_inner, "Circle / Maker", "-")
-        self.lbl_rating = self._create_info_row(info_inner, "Rating Usia", "-")
-        self.lbl_genre = self._create_info_row(info_inner, "Genre / Tag", "-")
+        self.lbl_q_id = self._create_info_row(info_inner, "Kode RJ", "-")
+        self.lbl_q_title = self._create_info_row(info_inner, "Judul", "-")
+        self.lbl_q_cv = self._create_info_row(info_inner, "CV / Seiyuu", "-")
+        self.lbl_q_circle = self._create_info_row(info_inner, "Circle / Maker", "-")
+        self.lbl_q_rating = self._create_info_row(info_inner, "Rating Usia", "-")
+        self.lbl_q_genre = self._create_info_row(info_inner, "Genre / Tag", "-")
 
     def _build_history_tab(self):
         container = self.tab_history
 
-        # Panel Kiri: Tabel Riwayat
+        # Layout 2 Kolom: Kiri (Tabel Riwayat), Kanan (Detail & Cover)
         left_h_panel = tk.Frame(container, bg="#1e1e2e")
         left_h_panel.pack(side="left", fill="both", expand=True, padx=(0, 10), pady=10)
 
-        # Header Riwayat
+        # Header Riwayat & Tombol Refresh
         h_header = tk.Frame(left_h_panel, bg="#1e1e2e")
         h_header.pack(fill="x", pady=(0, 6))
 
-        lbl_hist_title = tk.Label(
+        lbl_h_header = tk.Label(
             h_header,
-            text="Daftar Audio yang Pernah Diunduh",
+            text="Riwayat Karya Terunduh",
             font=("Segoe UI", 11, "bold"),
             bg="#1e1e2e",
             fg="#50fa7b",
         )
-        lbl_hist_title.pack(side="left")
+        lbl_h_header.pack(side="left")
 
         refresh_btn = tk.Button(
             h_header,
-            text="🔄 Segarkan",
+            text="Segarkan",
             font=("Segoe UI", 9),
             bg="#44475a",
             fg="#f8f8f2",
             bd=0,
-            padx=8,
+            padx=12,
             pady=3,
             cursor="hand2",
             command=self._load_history_view,
@@ -925,7 +1790,7 @@ class JapaneseASMRApp(tk.Tk):
 
         self.lbl_hist_stats = tk.Label(
             stats_frame,
-            text="📊 Memuat statistik koleksi...",
+            text="Memuat statistik koleksi...",
             font=("Segoe UI", 9, "bold"),
             bg="#282a36",
             fg="#8be9fd",
@@ -975,7 +1840,7 @@ class JapaneseASMRApp(tk.Tk):
 
         self.btn_play_file = tk.Button(
             h_actions,
-            text="▶️ Putar di Player Bawaan",
+            text="Putar di Player Bawaan",
             font=("Segoe UI", 9, "bold"),
             bg="#50fa7b",
             fg="#1e1e2e",
@@ -989,7 +1854,7 @@ class JapaneseASMRApp(tk.Tk):
 
         self.btn_del_history = tk.Button(
             h_actions,
-            text="🗑️ Hapus dari Riwayat",
+            text="Hapus Riwayat",
             font=("Segoe UI", 8),
             bg="#44475a",
             fg="#ff5555",
@@ -1039,7 +1904,7 @@ class JapaneseASMRApp(tk.Tk):
 
         lbl_p_title = tk.Label(
             p_header,
-            text="📻 Daftar Putar / Koleksi Audio",
+            text="Daftar Putar / Koleksi Audio",
             font=("Segoe UI", 11, "bold"),
             bg="#1e1e2e",
             fg="#50fa7b",
@@ -1048,12 +1913,12 @@ class JapaneseASMRApp(tk.Tk):
 
         refresh_p_btn = tk.Button(
             p_header,
-            text="🔄 Segarkan Playlist",
+            text="Segarkan",
             font=("Segoe UI", 9),
             bg="#44475a",
             fg="#f8f8f2",
             bd=0,
-            padx=8,
+            padx=12,
             pady=3,
             cursor="hand2",
             command=self._refresh_playlist_view,
@@ -1220,14 +2085,14 @@ class JapaneseASMRApp(tk.Tk):
 
         self.btn_loop = tk.Button(
             ctrl_frame,
-            text="🔁 Loop: OFF",
+            text="Loop: OFF",
             font=("Segoe UI", 8),
             bg="#44475a",
             fg="#a6adc8",
             activebackground="#6272a4",
             bd=0,
-            padx=6,
-            pady=3,
+            padx=8,
+            pady=4,
             cursor="hand2",
             command=self._player_toggle_loop,
         )
@@ -1237,8 +2102,8 @@ class JapaneseASMRApp(tk.Tk):
         vol_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
         vol_frame.pack(fill="x", padx=15, pady=(2, 0))
 
-        lbl_vol_icon = tk.Label(vol_frame, text="🔊", font=("Segoe UI", 9), bg="#1e1e2e", fg="#bd93f9")
-        lbl_vol_icon.pack(side="left", padx=(0, 4))
+        lbl_vol_icon = tk.Label(vol_frame, text="Volume:", font=("Segoe UI", 8, "bold"), bg="#1e1e2e", fg="#bd93f9")
+        lbl_vol_icon.pack(side="left", padx=(0, 6))
 
         self.lbl_vol_val = tk.Label(vol_frame, text="80%", font=("Segoe UI", 8), bg="#1e1e2e", fg="#a6adc8", width=4)
         self.lbl_vol_val.pack(side="right")
@@ -1304,6 +2169,24 @@ class JapaneseASMRApp(tk.Tk):
         d_dir = get_download_dir()
         os.makedirs(d_dir, exist_ok=True)
         os.startfile(os.path.abspath(d_dir))
+
+    def _open_settings_dialog(self):
+        """Membuka jendela dialog Pengaturan Modern tanpa memblokir penutupan aplikasi utama."""
+        if self._settings_dialog and self._settings_dialog.winfo_exists():
+            self._settings_dialog.lift()
+            self._settings_dialog.focus_force()
+            return
+        self._settings_dialog = SettingsDialog(self)
+
+    def _on_app_close(self):
+        """Menutup seluruh aplikasi, modal anak, dan mematikan background player secara bersih."""
+        if self._settings_dialog and self._settings_dialog.winfo_exists():
+            try:
+                self._settings_dialog.destroy()
+            except Exception:
+                pass
+        self._player_stop()
+        self.destroy()
 
     def _add_to_queue(self):
         raw_text = self.id_entry.get().strip()
@@ -1416,14 +2299,14 @@ class JapaneseASMRApp(tk.Tk):
                 self.cover_canvas.create_text(145, 97, text="Memuat cover...", fill="#6272a4", font=("Segoe UI", 10))
 
     def _show_info_card(self, item):
-        self.lbl_id.config(text=item["rjid"])
-        self.lbl_title.config(text=item["title"])
-        self.lbl_cv.config(text=item["cv"])
-        self.lbl_circle.config(text=item["circle"])
+        self.lbl_q_id.config(text=item["rjid"])
+        self.lbl_q_title.config(text=item["title"])
+        self.lbl_q_cv.config(text=item["cv"])
+        self.lbl_q_circle.config(text=item["circle"])
         
         rating = item.get("age_rating", "-")
-        self.lbl_rating.config(text=rating, fg="#ff79c6" if "18" in rating else "#50fa7b")
-        self.lbl_genre.config(text=item.get("genre", "-"))
+        self.lbl_q_rating.config(text=rating, fg="#ff79c6" if "18" in rating else "#50fa7b")
+        self.lbl_q_genre.config(text=item.get("genre", "-"))
 
     def _render_cover_image(self, pil_image):
         self.current_preview_image = ImageTk.PhotoImage(pil_image)
@@ -1438,12 +2321,12 @@ class JapaneseASMRApp(tk.Tk):
         self.queue_items.clear()
         self.cover_canvas.delete("all")
         self.cover_canvas.create_text(145, 97, text="Tidak ada cover", fill="#6272a4", font=("Segoe UI", 10))
-        self.lbl_id.config(text="-")
-        self.lbl_title.config(text="-")
-        self.lbl_cv.config(text="-")
-        self.lbl_circle.config(text="-")
-        self.lbl_rating.config(text="-", fg="#f8f8f2")
-        self.lbl_genre.config(text="-")
+        self.lbl_q_id.config(text="-")
+        self.lbl_q_title.config(text="-")
+        self.lbl_q_cv.config(text="-")
+        self.lbl_q_circle.config(text="-")
+        self.lbl_q_rating.config(text="-", fg="#f8f8f2")
+        self.lbl_q_genre.config(text="-")
         self._update_progress(0, "Antrean dibersihkan")
         self._log("[i] Antrean dibersihkan.")
 
@@ -1611,7 +2494,7 @@ class JapaneseASMRApp(tk.Tk):
                 ans = ask_dark_yesno(
                     self,
                     "File Tidak Ditemukan",
-                    f"File audio untuk '{h.get('rjid', '-')}' sudah tidak ditemukan di lokasi penyimpanan (mungkin telah dipindahkan atau dihapus).\n\nLokasi:\n{file_path}\n\nApakah Anda ingin menghapus catatan ini dari daftar riwayat?",
+                    f"File audio untuk '{h.get('rjid', '-')}' sudah tidak ditemukan di lokasi penyimpanan (mungkin telah dipindahkan atau dihapus).\n\nLokasi:\n{file_path}\n\nApakah Anda ingin menghapus riwayat ini dari daftar riwayat?",
                     confirm_text="Hapus Catatan",
                     cancel_text="Batal",
                 )
@@ -2174,9 +3057,9 @@ class JapaneseASMRApp(tk.Tk):
     def _player_toggle_loop(self):
         self.is_looping = not self.is_looping
         if self.is_looping:
-            self.btn_loop.config(text="🔁 Loop: ON", fg="#50fa7b", bg="#282a36")
+            self.btn_loop.config(text="Loop: ON", fg="#50fa7b", bg="#282a36")
         else:
-            self.btn_loop.config(text="🔁 Loop: OFF", fg="#a6adc8", bg="#44475a")
+            self.btn_loop.config(text="Loop: OFF", fg="#a6adc8", bg="#44475a")
 
     def _player_tick(self):
         if not self.is_playing or not self.current_playing_file:
