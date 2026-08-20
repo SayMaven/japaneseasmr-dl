@@ -1,8 +1,24 @@
 import json
 import os
 import shutil
+import sys
 import time
 from PIL import Image
+
+# Daftarkan folder bin/ ke PATH environment agar binary (yt-dlp, ffmpeg, aria2c) selalu ditemukan
+def _setup_bin_path():
+    candidate_dirs = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"),
+        os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "bin"),
+    ]
+    if hasattr(sys, "_MEIPASS"):
+        candidate_dirs.insert(0, os.path.join(sys._MEIPASS, "bin"))
+
+    for b_dir in candidate_dirs:
+        if os.path.exists(b_dir) and b_dir not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = b_dir + os.pathsep + os.environ.get("PATH", "")
+
+_setup_bin_path()
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
@@ -201,7 +217,7 @@ def discover_all_audio_tracks(rj_id, referer="https://japaneseasmr.com", user_ag
                 # Jika track berturut-turut tidak ada, hentikan scanning angka
                 break
 
-    # 4. Cek Omake / Bonus / Tokuten (.mp3)
+    # 4. Cek Omake / Bonus / Tokuten / EX (.mp3)
     omake_patterns = [
         ("Omake", f"https://v.weeab0o.xyz/{clean_id}omake.mp3"),
         ("Omake", f"https://v.weeab0o.xyz/{clean_id}%20omake.mp3"),
@@ -216,6 +232,14 @@ def discover_all_audio_tracks(rj_id, referer="https://japaneseasmr.com", user_ag
         ("Bonus", f"https://v.weeab0o.xyz/{clean_id}_bonus.mp3"),
         ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}tokuten.mp3"),
         ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}%20tokuten.mp3"),
+        ("EX", f"https://v.weeab0o.xyz/{clean_id}%20ex.mp3"),
+        ("EX", f"https://v.weeab0o.xyz/{clean_id}ex.mp3"),
+        ("EX", f"https://v.weeab0o.xyz/{clean_id}_ex.mp3"),
+        ("EX", f"https://v.weeab0o.xyz/{clean_id}-ex.mp3"),
+        ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex%201.mp3"),
+        ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex1.mp3"),
+        ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex%202.mp3"),
+        ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex2.mp3"),
     ]
     seen_urls = {t["url"] for t in found_tracks}
     for om_name, om_url in omake_patterns:

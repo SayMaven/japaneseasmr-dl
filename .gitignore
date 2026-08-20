@@ -3,7 +3,6 @@
 *.m4a
 *.mp4
 *.jpg
-*.png
 *.webp
 temp_*
 downloads/
@@ -20,3 +19,12 @@ plan.md
 .cache/
 config.json
 history.json
+
+bin/
+*.exe
+*.build/
+*.dist/
+*.onefile-build/
+
+nuitka_build_cli.bat
+nuitka_build.bat

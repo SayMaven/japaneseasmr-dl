@@ -336,8 +336,15 @@ def fetch_dlsite_metadata(rj_id):
 
 class JapaneseASMRApp(tk.Tk):
     def __init__(self):
+        # Set Explicit AppUserModelID agar Taskbar Windows menampilkan ikon custom
+        if sys.platform == "win32":
+            try:
+                ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SayMaven.JapaneseASMR.Downloader.App")
+            except Exception:
+                pass
+
         super().__init__()
-        self.title("JapaneseASMR Downloader & Cover Embedder")
+        self.title("JapaneseASMR Downloader")
         self.geometry("1060x820")
         self.minsize(940, 720)
         self.configure(bg="#1e1e2e")
@@ -365,10 +372,94 @@ class JapaneseASMRApp(tk.Tk):
         self.current_track_index = -1
         self.player_preview_image = None
 
+        # Set Window & Taskbar Icon
+        self._setup_app_icons()
+
         self._init_styles()
         self._build_ui()
         self._load_history_view()
         self._refresh_playlist_view()
+
+        # Re-apply icon setelah window di-render sempurna oleh Windows DWM
+        if sys.platform == "win32":
+            self.after(150, self._apply_win32_taskbar_icon)
+
+    def _setup_app_icons(self):
+        candidate_roots = [
+            os.path.dirname(os.path.abspath(__file__)),
+            os.path.dirname(os.path.abspath(sys.executable)),
+            os.getcwd(),
+        ]
+        if hasattr(sys, "_MEIPASS"):
+            candidate_roots.insert(0, sys._MEIPASS)
+
+        self._icon_ico_path = None
+        self._icon_png_path = None
+        for root in candidate_roots:
+            p_ico = os.path.join(root, "assets", "icon.ico")
+            p_png = os.path.join(root, "assets", "icon.png")
+            if os.path.exists(p_ico) and not self._icon_ico_path:
+                self._icon_ico_path = p_ico
+            if os.path.exists(p_png) and not self._icon_png_path:
+                self._icon_png_path = p_png
+
+        # 1. Pasang via Tkinter standard
+        if self._icon_ico_path and os.path.exists(self._icon_ico_path):
+            try:
+                self.iconbitmap(default=self._icon_ico_path)
+            except Exception:
+                try:
+                    self.iconbitmap(self._icon_ico_path)
+                except Exception:
+                    pass
+
+        if self._icon_png_path and os.path.exists(self._icon_png_path):
+            try:
+                with Image.open(self._icon_png_path) as pil_img:
+                    self._app_icon_img = ImageTk.PhotoImage(pil_img)
+                    self.iconphoto(True, self._app_icon_img)
+            except Exception:
+                pass
+
+        self._apply_win32_taskbar_icon()
+
+    def _apply_win32_taskbar_icon(self):
+        """Memaksa Windows Taskbar & Alt-Tab menggunakan icon custom via Win32 SendMessage WM_SETICON."""
+        if sys.platform != "win32" or not self._icon_ico_path or not os.path.exists(self._icon_ico_path):
+            return
+        try:
+            self.update_idletasks()
+            GA_ROOT = 2
+            hwnd = ctypes.windll.user32.GetAncestor(self.winfo_id(), GA_ROOT)
+            if not hwnd:
+                hwnd = ctypes.windll.user32.GetParent(self.winfo_id())
+            if not hwnd:
+                hwnd = self.winfo_id()
+
+            IMAGE_ICON = 1
+            LR_LOADFROMFILE = 0x00000010
+            WM_SETICON = 0x0080
+            ICON_SMALL = 0
+            ICON_BIG = 1
+
+            # Load icon 48x48 / 32x32 untuk taskbar & 16x16 untuk titlebar
+            hicon_big = ctypes.windll.user32.LoadImageW(
+                None, self._icon_ico_path, IMAGE_ICON, 48, 48, LR_LOADFROMFILE
+            )
+            if not hicon_big:
+                hicon_big = ctypes.windll.user32.LoadImageW(
+                    None, self._icon_ico_path, IMAGE_ICON, 32, 32, LR_LOADFROMFILE
+                )
+            hicon_small = ctypes.windll.user32.LoadImageW(
+                None, self._icon_ico_path, IMAGE_ICON, 16, 16, LR_LOADFROMFILE
+            )
+
+            if hicon_big:
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_BIG, hicon_big)
+            if hicon_small:
+                ctypes.windll.user32.SendMessageW(hwnd, WM_SETICON, ICON_SMALL, hicon_small)
+        except Exception:
+            pass
 
     def _init_styles(self):
         self.style = ttk.Style(self)
@@ -435,7 +526,7 @@ class JapaneseASMRApp(tk.Tk):
 
         title_label = tk.Label(
             header_frame,
-            text="🎧 JapaneseASMR Downloader + Cover Embedder",
+            text="JapaneseASMR Downloader",
             font=("Segoe UI", 15, "bold"),
             bg="#282a36",
             fg="#50fa7b",
