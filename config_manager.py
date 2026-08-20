@@ -10,15 +10,46 @@ def _setup_bin_path():
     candidate_dirs = [
         os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"),
         os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "bin"),
+        os.path.join(os.getcwd(), "bin"),
     ]
     if hasattr(sys, "_MEIPASS"):
         candidate_dirs.insert(0, os.path.join(sys._MEIPASS, "bin"))
 
     for b_dir in candidate_dirs:
-        if os.path.exists(b_dir) and b_dir not in os.environ.get("PATH", ""):
-            os.environ["PATH"] = b_dir + os.pathsep + os.environ.get("PATH", "")
+        if os.path.isdir(b_dir):
+            abs_b = os.path.abspath(b_dir)
+            current_path = os.environ.get("PATH", "")
+            if abs_b not in current_path:
+                os.environ["PATH"] = abs_b + os.pathsep + current_path
 
 _setup_bin_path()
+
+
+def get_bin_executable(binary_name):
+    """Mencari path absolut executable (yt-dlp, ffmpeg, aria2c) agar selalu ditemukan di komputer baru."""
+    _setup_bin_path()
+    exe_name = f"{binary_name}.exe" if sys.platform == "win32" and not binary_name.lower().endswith(".exe") else binary_name
+
+    candidate_dirs = [
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "bin"),
+        os.path.join(os.path.dirname(os.path.abspath(sys.executable)), "bin"),
+        os.path.join(os.getcwd(), "bin"),
+    ]
+    if hasattr(sys, "_MEIPASS"):
+        candidate_dirs.insert(0, os.path.join(sys._MEIPASS, "bin"))
+
+    for c_dir in candidate_dirs:
+        target = os.path.join(c_dir, exe_name)
+        if os.path.isfile(target):
+            return target
+
+    # Fallback ke system PATH
+    found = shutil.which(binary_name) or shutil.which(exe_name)
+    if found:
+        return found
+
+    return binary_name
+
 
 CONFIG_FILE = "config.json"
 HISTORY_FILE = "history.json"
@@ -38,15 +69,16 @@ DEFAULT_CONFIG = {
 def get_ytdlp_version():
     """Mengambil versi yt-dlp yang terpasang."""
     import subprocess
+    ytdlp_bin = get_bin_executable("yt-dlp")
     try:
         res = subprocess.run(
-            ["yt-dlp", "--version"],
+            [ytdlp_bin, "--version"],
             capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-            timeout=8,
+            timeout=10,
         )
-        if res.returncode == 0:
+        if res.returncode == 0 and res.stdout.strip():
             return res.stdout.strip()
         return "Tidak diketahui"
     except Exception:
@@ -60,7 +92,8 @@ def update_ytdlp_engine(channel="stable"):
     if target_channel not in ["stable", "nightly"]:
         target_channel = "stable"
 
-    cmd = ["yt-dlp", "--update-to", target_channel]
+    ytdlp_bin = get_bin_executable("yt-dlp")
+    cmd = [ytdlp_bin, "--update-to", target_channel]
     try:
         res = subprocess.run(
             cmd,

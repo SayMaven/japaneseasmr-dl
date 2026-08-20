@@ -54,56 +54,60 @@ Sebelum menjalankan aplikasi dari *source code*, pastikan komponen berikut telah
 
 ---
 
-## Cara Menjalankan
+## Cara Instalasi & Penggunaan
 
-### 1. Menjalankan Mode Desktop GUI (Utama)
-```bash
-python main.py
-```
-
-### 2. Menjalankan Mode Terminal CLI
-Jika Anda ingin menggunakan versi CLI interaktif berbasis command-line:
-```bash
-python cli.py
-```
+### 1. Menggunakan Installer Windows (Direkomendasikan)
+Bagi pengguna umum, Anda **tidak perlu menginstal Python atau alat tambahan apa pun**:
+1. Unduh installer terbaru **`JapaneseASMR_Setup_v1.0.1.exe`** dari menu **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
+2. Jalankan installer dan ikuti petunjuk pemasangan hingga selesai.
+3. Aplikasi siap digunakan langsung dari Start Menu atau Desktop!
 
 ---
 
-## Kompilasi Executable & Installer (Windows)
+### 2. Menjalankan dari Source Code (Developer Mode)
 
-Project ini telah dilengkapi konfigurasi kompilasi binary C native via **Nuitka** dan pembuat installer via **Inno Setup**:
+Jika Anda ingin menjalankan atau mengembangkan langsung dari kode sumber (*source code*):
 
-### 1. Kompilasi Standalone Binary (`JapaneseASMR.exe`)
-Jalankan batch script build:
-```cmd
-.\nuitka_build.bat
-```
-Hasil executable mandiri tanpa console popup akan dibuat di dalam folder `dist/`.
+1. **Clone Repository**:
+   ```bash
+   git clone https://github.com/SayMaven/japaneseasmr-dl.git
+   cd japaneseasmr-dl
+   ```
 
-### 2. Membuat Setup Installer (`JapaneseASMR_Setup_v1.0.0.exe`)
-1. Buka file `installer_setup.iss` menggunakan **Inno Setup Compiler**.
-2. Klik tombol **Compile** (atau tekan `Ctrl + F9`).
-3. File setup installer siap pakai akan tersimpan di dalam folder `dist_installer/`.
+2. **Instal Dependensi Python**:
+   ```bash
+   pip install Pillow
+   ```
+
+3. **Pastikan Binary Engine Tersedia**:
+   Pastikan **[yt-dlp](https://github.com/yt-dlp/yt-dlp)**, **[ffmpeg](https://ffmpeg.org/)**, dan **[aria2c](https://github.com/aria2/aria2)** telah terpasang di system PATH atau diletakkan di dalam folder `bin/`.
+
+4. **Jalankan Aplikasi**:
+   * **Mode Desktop GUI (Utama)**:
+     ```bash
+     python main.py
+     ```
+   * **Mode Terminal CLI (Interaktif)**:
+     ```bash
+     python cli.py
+     ```
 
 ---
 
-## Struktur Direktori
+## Struktur Direktori Repository
 
 ```text
 japaneseasmr-dl/
-├── assets/                # Aset ikon dan grafis (app_icon.ico, app_icon.png)
-├── bin/                   # Binary portabel (aria2c.exe, ffmpeg.exe, yt-dlp.exe)
+├── assets/                # Aset ikon dan grafis (icon.ico, icon.png)
 ├── config_manager.py      # Modul manajemen konfigurasi, riwayat, & scraper DLsite
 ├── gui.py                 # Modul antarmuka GUI Desktop, Player, & Settings
 ├── main.py                # Entry-point utama Desktop GUI
 ├── cli.py                 # Entry-point mandiri Terminal CLI
-├── nuitka_build.bat       # Script kompilasi Nuitka ke Windows Executable
-├── installer_setup.iss    # Script Inno Setup Compiler untuk installer Windows
 ├── README.md              # Dokumentasi project
-└── downloads/             # Folder default penyimpanan hasil unduhan MP3
+└── downloads/             # Folder penyimpanan hasil unduhan MP3
 ```
 
 ---
 
 ## Lisensi
-Didistribusikan di bawah lisensi Open Source untuk penggunaan pribadi. Dibuat oleh **SayMaven**.
+Proyek ini dilisensikan di bawah **[GNU General Public License v3.0 (GPL-3.0)](LICENSE)**. Hak cipta © 2026 **SayMaven**.

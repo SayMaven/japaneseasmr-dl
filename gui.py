@@ -19,6 +19,7 @@ from config_manager import (
     clear_cover_cache,
     clear_temp_cache,
     discover_all_audio_tracks,
+    get_bin_executable,
     get_cache_size_info,
     get_download_dir,
     get_ytdlp_version,
@@ -36,6 +37,19 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
+# Regex Progress Parsing untuk yt-dlp & aria2c
+RE_YTDLP_PROGRESS = re.compile(
+    r'\[download\]\s+([\d\.]+)%\s+of\s+~?\s*([\d\.]+[kMGTP]?i?B)(?:\s+at\s+([\d\.]+[kMGTP]?i?B/s))?(?:\s+ETA\s+([\d:]+))?',
+    re.IGNORECASE,
+)
+RE_ARIA2_PROGRESS = re.compile(
+    r'\[#\w+\s+([\d\.]+[kMGTP]?i?B)/([\d\.]+[kMGTP]?i?B)\s*\(([\d\.]+)%\).*?DL:([\d\.]+[kMGTP]?i?B).*?ETA:([\w\d]+)\]',
+    re.IGNORECASE,
+)
+RE_FRAG_PROGRESS = re.compile(
+    r'\[download\]\s+Downloading\s+(?:item|fragment)\s+(\d+)\s+of\s+(\d+)',
+    re.IGNORECASE,
+)
 
 import ctypes
 
@@ -817,7 +831,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_version = tk.Label(
             title_box,
-            text="Versi 1.0.0 (Release Build) • Windows Edition",
+            text="Versi 1.0.1 (Release Build) • Windows Edition",
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#bd93f9",
@@ -933,7 +947,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_version = tk.Label(
             title_box,
-            text="Versi 1.0.0 (Release Build) • Windows Edition",
+            text="Versi 1.0.1 (Release Build) • Windows Edition",
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#bd93f9",
@@ -1687,6 +1701,37 @@ class JapaneseASMRApp(tk.Tk):
         self.progress_bar.pack(fill="x")
         self.progress_bar["value"] = 0
 
+        # Progress Detail Bar: Kecepatan, Estimasi Sisa Waktu, dan Ukuran Data
+        progress_detail = tk.Frame(progress_container, bg="#1e1e2e")
+        progress_detail.pack(fill="x", pady=(4, 0))
+
+        self.lbl_progress_speed = tk.Label(
+            progress_detail,
+            text="Kecepatan: -",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#8be9fd",
+        )
+        self.lbl_progress_speed.pack(side="left")
+
+        self.lbl_progress_eta = tk.Label(
+            progress_detail,
+            text="Sisa Waktu: -",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#bd93f9",
+        )
+        self.lbl_progress_eta.pack(side="left", padx=(16, 0))
+
+        self.lbl_progress_size = tk.Label(
+            progress_detail,
+            text="Ukuran: - / -",
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#a6adc8",
+        )
+        self.lbl_progress_size.pack(side="right")
+
         # Log Console
         log_frame = tk.LabelFrame(
             left_panel,
@@ -2336,13 +2381,19 @@ class JapaneseASMRApp(tk.Tk):
             self.log_text.see("end")
         self.after(0, _append)
 
-    def _update_progress(self, val_pct, status_text=None):
+    def _update_progress(self, val_pct, status_text=None, speed=None, eta=None, size_str=None):
         def _apply():
             clamped = max(0, min(100, val_pct))
             self.progress_bar["value"] = clamped
             self.lbl_progress_pct.config(text=f"{int(clamped)}%")
             if status_text:
                 self.lbl_progress_status.config(text=f"Status: {status_text}")
+            if speed is not None and hasattr(self, "lbl_progress_speed"):
+                self.lbl_progress_speed.config(text=speed)
+            if eta is not None and hasattr(self, "lbl_progress_eta"):
+                self.lbl_progress_eta.config(text=eta)
+            if size_str is not None and hasattr(self, "lbl_progress_size"):
+                self.lbl_progress_size.config(text=size_str)
         self.after(0, _apply)
 
     def _paste_from_clipboard(self):
@@ -2682,13 +2733,31 @@ class JapaneseASMRApp(tk.Tk):
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
                     ])
 
-                    track_prog = base_pct + item_step * (0.15 + 0.65 * (t_idx / len(tracks)))
-                    self._update_progress(track_prog, f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]...")
-                    self._log(f"[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}] (16 koneksi)...")
+                    t_start_ratio = 0.15 + 0.65 * ((t_idx - 1) / len(tracks))
+                    t_end_ratio = 0.15 + 0.65 * (t_idx / len(tracks))
+
+                    self._update_progress(
+                        base_pct + item_step * t_start_ratio,
+                        f"[{idx+1}/{total_items}] Menghubungkan {t_name} [{t_idx}/{len(tracks)}]...",
+                        speed="Menghubungkan...",
+                        eta="Menghitung...",
+                        size_str="Ukuran: Memuat...",
+                    )
+                    self._log(f"[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}]...")
+
+                    conn_val = str(self.config.get("connections", 16))
+                    ytdlp_bin = get_bin_executable("yt-dlp")
+                    aria2c_bin = get_bin_executable("aria2c")
+                    ffmpeg_bin = get_bin_executable("ffmpeg")
+                    ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_bin))
+
                     cmd_ytdlp = [
-                        "yt-dlp",
-                        "-N", "16",
-                        "--downloader", "aria2c",
+                        ytdlp_bin,
+                        "--newline",
+                        "--ffmpeg-location", ffmpeg_dir,
+                        "-N", conn_val,
+                        "--downloader", aria2c_bin,
+                        "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --summary-interval=1",
                         "--fixup", "never",
                         "--add-header", f"Referer: {REFERER}",
                         "--add-header", f"Origin: {REFERER}",
@@ -2700,8 +2769,86 @@ class JapaneseASMRApp(tk.Tk):
                     ]
                     self.current_process = subprocess.Popen(
                         cmd_ytdlp,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        text=True,
+                        bufsize=1,
+                        universal_newlines=True,
+                        encoding="utf-8",
+                        errors="replace",
                         creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                     )
+
+                    # Baca stream output secara real-time untuk update indikator kecepatan, ETA, dan ukuran
+                    if self.current_process.stdout:
+                        for raw_line in iter(self.current_process.stdout.readline, ""):
+                            if self.stop_requested:
+                                break
+                            line_s = raw_line.strip()
+                            if not line_s:
+                                continue
+
+                            # 1. Parse format standar yt-dlp
+                            m_yt = RE_YTDLP_PROGRESS.search(line_s)
+                            if m_yt:
+                                pct_val = float(m_yt.group(1))
+                                total_sz = m_yt.group(2) or "-"
+                                sp = m_yt.group(3) or "-"
+                                et = m_yt.group(4) or "-"
+                                track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                cur_overall = base_pct + item_step * track_part
+                                self._update_progress(
+                                    cur_overall,
+                                    status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
+                                    speed=f"Kecepatan: {sp}",
+                                    eta=f"Sisa Waktu: {et}",
+                                    size_str=f"Total: ~{total_sz}",
+                                )
+                                continue
+
+                            # 2. Parse format summary aria2c
+                            m_ar = RE_ARIA2_PROGRESS.search(line_s)
+                            if m_ar:
+                                cur_sz = m_ar.group(1)
+                                tot_sz = m_ar.group(2)
+                                pct_val = float(m_ar.group(3))
+                                sp = f"{m_ar.group(4)}/s"
+                                et = m_ar.group(5)
+                                track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                cur_overall = base_pct + item_step * track_part
+                                self._update_progress(
+                                    cur_overall,
+                                    status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
+                                    speed=f"Kecepatan: {sp}",
+                                    eta=f"Sisa Waktu: {et}",
+                                    size_str=f"Ukuran: {cur_sz} / {tot_sz}",
+                                )
+                                continue
+
+                            # 3. Parse format fragment HLS
+                            m_fr = RE_FRAG_PROGRESS.search(line_s)
+                            if m_fr:
+                                cur_f = int(m_fr.group(1))
+                                tot_f = int(m_fr.group(2))
+                                if tot_f > 0:
+                                    pct_val = (cur_f / tot_f) * 100.0
+                                    track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                    cur_overall = base_pct + item_step * track_part
+                                    self._update_progress(
+                                        cur_overall,
+                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} (Frag {cur_f}/{tot_f})",
+                                        speed=None,
+                                        eta=None,
+                                        size_str=f"Segmen: {cur_f}/{tot_f}",
+                                    )
+                                    continue
+
+                            # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative]
+                            if line_s.startswith("ERROR:") or line_s.startswith("WARNING:"):
+                                self._log(f"  [!] {line_s}")
+                            elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file"]):
+                                self._log(f"  {line_s}")
+
                     self.current_process.wait()
 
                     if self.stop_requested:
@@ -2714,10 +2861,10 @@ class JapaneseASMRApp(tk.Tk):
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp4"),
                     ]
-                    actual_file = next((f for f in possible_files if os.path.exists(f)), None)
+                    actual_file = next((f for f in possible_files if os.path.exists(f) and os.path.getsize(f) > 0), None)
 
                     if not actual_file:
-                        raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
+                        raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh atau diekstrak.")
                     downloaded_track_files.append(actual_file)
 
                 if self.stop_requested:
@@ -2736,6 +2883,7 @@ class JapaneseASMRApp(tk.Tk):
                 rating_val = item.get("age_rating", "-")
 
                 self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata ID3...")
+                ffmpeg_bin = get_bin_executable("ffmpeg")
 
                 if len(downloaded_track_files) > 1:
                     self._log(f"[3/3] Menggabungkan {len(tracks)} track & menyematkan metadata ID3...")
@@ -2747,7 +2895,7 @@ class JapaneseASMRApp(tk.Tk):
                             f_concat.write(f"file '{safe_p}'\n")
 
                     cmd_ffmpeg = [
-                        "ffmpeg",
+                        ffmpeg_bin,
                         "-hide_banner",
                         "-loglevel", "error",
                         "-y",
@@ -2774,7 +2922,7 @@ class JapaneseASMRApp(tk.Tk):
                 else:
                     self._log("[3/3] Menyematkan cover art, Genre, Rating & metadata ID3...")
                     cmd_ffmpeg = [
-                        "ffmpeg",
+                        ffmpeg_bin,
                         "-hide_banner",
                         "-loglevel", "error",
                         "-y",
@@ -2805,6 +2953,14 @@ class JapaneseASMRApp(tk.Tk):
                 if self.stop_requested:
                     break
 
+                # Validasi ketat file output
+                if self.current_process.returncode != 0 or not os.path.exists(final_output) or os.path.getsize(final_output) == 0:
+                    raise RuntimeError(f"Gagal memproses file audio final: {os.path.basename(final_output)}")
+                self.current_process.wait()
+
+                if self.stop_requested:
+                    break
+
                 # Simpan ke riwayat unduhan & cache cover art
                 add_to_history(
                     rjid=rjid,
@@ -2821,7 +2977,13 @@ class JapaneseASMRApp(tk.Tk):
                 item["status"] = "Selesai"
                 self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai"))
                 self.after(0, self._load_history_view)
-                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai {rjid}")
+                self._update_progress(
+                    (idx + 1) * item_step,
+                    f"[{idx+1}/{total_items}] Selesai {rjid}",
+                    speed="Kecepatan: -",
+                    eta="Sisa Waktu: -",
+                    size_str="Status: Selesai",
+                )
                 self._log(f"[✓] SUKSES: Tersimpan di {os.path.basename(final_output)}")
 
             except Exception as e:
@@ -2846,14 +3008,26 @@ class JapaneseASMRApp(tk.Tk):
 
         if self.stop_requested:
             self._log("[!] Semua proses download telah dihentikan.")
-            self._update_progress(0, "Download Dihentikan")
+            self._update_progress(
+                0,
+                "Download Dihentikan",
+                speed="Kecepatan: -",
+                eta="Sisa Waktu: -",
+                size_str="Ukuran: - / -",
+            )
             # Kembalikan item yang statusnya masih Downloading ke Pending
             for idx, item in enumerate(self.queue_items):
                 if item["status"] == "Downloading":
                     item["status"] = "Pending"
                     self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Pending"))
         else:
-            self._update_progress(100, "Semua proses selesai (100%)")
+            self._update_progress(
+                100,
+                "Semua proses selesai (100%)",
+                speed="Kecepatan: -",
+                eta="Sisa Waktu: -",
+                size_str="Ukuran: Selesai",
+            )
             self._log("\n--- Semua proses download dalam antrean selesai ---")
             self.after(0, lambda: show_dark_info(self, "Selesai", "Semua proses unduhan dalam antrean telah selesai!"))
 

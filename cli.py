@@ -6,6 +6,7 @@ import urllib.request
 from config_manager import (
     add_to_history,
     discover_all_audio_tracks,
+    get_bin_executable,
     get_download_dir,
     load_config,
     resolve_audio_url,
@@ -49,14 +50,8 @@ def parse_rj_ids(input_text):
     return ids if ids else [DEFAULT_ID]
 
 
-def download_cover(url, output_path):
-    req = urllib.request.Request(
-        url,
-        headers={
-            "Referer": REFERER,
-            "User-Agent": USER_AGENT,
-        },
-    )
+def download_cover(cover_url, output_path):
+    req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
     with urllib.request.urlopen(req) as response:
         img_bytes = response.read()
     try:
@@ -70,10 +65,17 @@ def download_cover(url, output_path):
 
 
 def download_audio(audio_url, output_tmpl):
+    ytdlp_bin = get_bin_executable("yt-dlp")
+    aria2c_bin = get_bin_executable("aria2c")
+    ffmpeg_bin = get_bin_executable("ffmpeg")
+    ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_bin))
+
     cmd = [
-        "yt-dlp",
+        ytdlp_bin,
+        "--ffmpeg-location", ffmpeg_dir,
         "-N", "16",
-        "--downloader", "aria2c",
+        "--downloader", aria2c_bin,
+        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M",
         "--fixup", "never",
         "--add-header", f"Referer: {REFERER}",
         "--add-header", f"Origin: {REFERER}",
@@ -87,6 +89,7 @@ def download_audio(audio_url, output_tmpl):
 
 
 def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None):
+    ffmpeg_bin = get_bin_executable("ffmpeg")
     if len(track_files) > 1:
         temp_dir = os.path.dirname(track_files[0])
         concat_list_file = os.path.join(temp_dir, "concat_cli_list.txt")
@@ -97,7 +100,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
 
         comment_val = f"Tracks: {len(track_files)} Gabungan ({', '.join(track_names)})" if track_names else f"Tracks: {len(track_files)} Gabungan"
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin,
             "-hide_banner",
             "-loglevel", "error",
             "-y",
@@ -129,7 +132,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
                     pass
     else:
         cmd = [
-            "ffmpeg",
+            ffmpeg_bin,
             "-hide_banner",
             "-loglevel", "error",
             "-y",
