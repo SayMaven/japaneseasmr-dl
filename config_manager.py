@@ -829,11 +829,14 @@ def write_cue_sheet(output_audio_path, chapters, meta=None):
     meta = meta or {}
     artist = meta.get("cv") if meta.get("cv") and meta.get("cv") != "-" else "JapaneseASMR"
     album = meta.get("title") or os.path.splitext(audio_fname)[0]
+    safe_artist = artist.replace('"', "'")
+    safe_album = album.replace('"', "'")
+    safe_audio_fname = audio_fname.replace('"', "'")
 
     lines = [
-        f'PERFORMER "{artist}"',
-        f'TITLE "{album}"',
-        f'FILE "{audio_fname}" MP3',
+        f'PERFORMER "{safe_artist}"',
+        f'TITLE "{safe_album}"',
+        f'FILE "{safe_audio_fname}" MP3',
     ]
     for idx, ch in enumerate(chapters):
         t_num = idx + 1
