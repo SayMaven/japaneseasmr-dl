@@ -903,7 +903,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
         comment_val = f"Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}"
 
     # 3. Susun parameter FFmpeg dasar
-    base_cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-y"]
+    base_cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-y", "-threads", "0"]
     base_cmd.extend(audio_input_args)
 
     input_count = 1
