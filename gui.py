@@ -601,7 +601,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_conn_hint = tk.Label(
             conn_box,
-            text="Koneksi paralel (Default: 16). Semakin tinggi koneksi, unduhan semakin cepat.",
+            text="Koneksi paralel (Default: 16). Maks. 16 untuk server file tunggal (Aria2c), s/d 32 untuk multi-stream.",
             font=("Segoe UI", 8),
             bg="#1e1e2e",
             fg="#6272a4",
@@ -2829,7 +2829,9 @@ class JapaneseASMRApp(tk.Tk):
                     )
                     self._log(f"[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}]...")
 
-                    conn_val = str(self.config.get("connections", 16))
+                    conn_int = int(self.config.get("connections", 16))
+                    conn_val = str(conn_int)
+                    aria_x = min(conn_int, 16)
                     ytdlp_bin = get_bin_executable("yt-dlp")
                     aria2c_bin = get_bin_executable("aria2c")
                     ffmpeg_bin = get_bin_executable("ffmpeg")
@@ -2860,7 +2862,7 @@ class JapaneseASMRApp(tk.Tk):
                             cmd_ytdlp.extend([
                                 "--downloader", "aria2c",
                                 "--downloader", "dash,m3u8:native",
-                                "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -j {conn_val} -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+                                "--downloader-args", f"aria2c:-s {conn_val} -x {aria_x} -j {conn_val} -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
                             ])
                         else:
                             cmd_ytdlp.extend([
