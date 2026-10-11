@@ -30,7 +30,7 @@ from config_manager import (
     set_download_dir,
     update_ytdlp_engine,
 )
-from dlsite_scraper import fetch_dlsite_metadata, sanitize_filename
+from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
 
 REFERER = "https://japaneseasmr.com"
 USER_AGENT = (
@@ -833,7 +833,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_version = tk.Label(
             title_box,
-            text="Versi 1.0.1 (Release Build) • Windows Edition",
+            text="Versi 1.1.0 (Release Build) • Windows Edition",
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#bd93f9",
@@ -843,7 +843,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_desc = tk.Label(
             card_about,
-            text="Aplikasi desktop all-in-one untuk mengunduh audio JapaneseASMR, menggabungkan multi-track & omake/EX secara otomatis, menyematkan cover art JPEG & metadata DLsite lengkap, serta dilengkapi pemutar audio bawaan.",
+            text="Aplikasi desktop all-in-one untuk mengunduh audio ASMR (dengan engine dual-source), filter track pintar, penyematan cover art HD & metadata DLsite lengkap, serta pemutar audio bawaan.",
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#cdd6f4",
@@ -915,6 +915,8 @@ class SettingsDialog(tk.Toplevel):
         # Sinkronisasi ke GUI utama
         self.parent.opt_detailed_name.set(self.cfg["use_detailed_filename"])
         self.parent.lbl_current_dir.config(text=f"Lokasi Simpan: {os.path.abspath(new_dir)}")
+        if hasattr(self.parent, "_refresh_playlist_view"):
+            self.parent._refresh_playlist_view()
 
         show_dark_info(self, "Tersimpan", "Semua pengaturan berhasil disimpan dan diterapkan!")
         self._on_dialog_close()
@@ -957,6 +959,7 @@ class JapaneseASMRApp(tk.Tk):
         self.is_playing = False
         self.is_paused = False
         self.player_duration_ms = 0
+        self.mci_raw_duration_ms = 0
         self.is_user_dragging_slider = False
         self.is_looping = False
         self.playlist_items = []
@@ -1682,14 +1685,14 @@ class JapaneseASMRApp(tk.Tk):
         p_header = tk.Frame(left_p_panel, bg="#1e1e2e")
         p_header.pack(fill="x", pady=(0, 6))
 
-        lbl_p_title = tk.Label(
+        self.lbl_p_title = tk.Label(
             p_header,
             text="Daftar Putar / Koleksi Audio",
             font=("Segoe UI", 11, "bold"),
             bg="#1e1e2e",
             fg="#50fa7b",
         )
-        lbl_p_title.pack(side="left")
+        self.lbl_p_title.pack(side="left")
 
         refresh_p_btn = tk.Button(
             p_header,
@@ -1938,6 +1941,7 @@ class JapaneseASMRApp(tk.Tk):
             set_download_dir(new_dir)
             self.lbl_current_dir.config(text=f"📁 Lokasi Simpan: {os.path.abspath(new_dir)}")
             self._log(f"[i] Folder penyimpanan diubah ke: {new_dir}")
+            self._refresh_playlist_view()
 
     def _log(self, message):
         def append():
@@ -2020,6 +2024,10 @@ class JapaneseASMRApp(tk.Tk):
             self.queue_items[index]["circle"] = meta["circle"] if meta["circle"] else "-"
             self.queue_items[index]["genre"] = meta.get("genre", "-")
             self.queue_items[index]["age_rating"] = meta.get("age_rating", "-")
+            if meta.get("cover_url"):
+                self.queue_items[index]["cover_url"] = meta["cover_url"]
+            if meta.get("dlsite_cover_url"):
+                self.queue_items[index]["dlsite_cover_url"] = meta["dlsite_cover_url"]
 
             def update_ui():
                 if self.tree.exists(str(index)):
@@ -2047,22 +2055,34 @@ class JapaneseASMRApp(tk.Tk):
                     pass
 
             # Download cover thumbnail preview jika belum di-cache
-            try:
-                req = urllib.request.Request(meta["cover_url"], headers={"Referer": REFERER, "User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req, timeout=6) as resp:
-                    img_data = resp.read()
-                pil_img = Image.open(io.BytesIO(img_data))
-                pil_img.thumbnail((280, 195))
-                self.queue_items[index]["cover_image"] = pil_img
+            cover_to_fetch = meta.get("cover_url") or resolve_best_cover_url(rj_id, meta.get("dlsite_cover_url"))
+            if cover_to_fetch:
+                try:
+                    cover_ref = "https://www.dlsite.com" if "dlsite" in cover_to_fetch else ("https://asmr.one/" if "asmr.one" in cover_to_fetch else REFERER)
+                    req = urllib.request.Request(
+                        cover_to_fetch,
+                        headers={
+                            "Referer": cover_ref,
+                            "User-Agent": USER_AGENT,
+                            "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                        },
+                    )
+                    with urllib.request.urlopen(req, timeout=8) as resp:
+                        img_data = resp.read()
+                    pil_img = Image.open(io.BytesIO(img_data))
+                    pil_img.thumbnail((280, 195))
+                    self.queue_items[index]["cover_image"] = pil_img
+                    os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
+                    pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
 
-                def update_img():
-                    selected = self.tree.selection()
-                    if selected and selected[0] == str(index):
-                        self._render_cover_image(pil_img)
+                    def update_img():
+                        selected = self.tree.selection()
+                        if selected and selected[0] == str(index):
+                            self._render_cover_image(pil_img)
 
-                self.after(0, update_img)
-            except Exception:
-                pass
+                    self.after(0, update_img)
+                except Exception:
+                    pass
 
     def _on_tree_select(self, event):
         selected = self.tree.selection()
@@ -2414,7 +2434,11 @@ class JapaneseASMRApp(tk.Tk):
             self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Mengunduh..."))
             self.after(0, lambda i=idx: self.tree.selection_set(str(i)))
 
-            cover_url = item.get("cover_url") or f"https://pic.weeabo0.xyz/{rjid}_img_main.jpg"
+            cover_url = item.get("cover_url")
+            if not cover_url or "weeabo" in cover_url:
+                cover_url = resolve_best_cover_url(rjid, item.get("dlsite_cover_url"))
+                item["cover_url"] = cover_url
+
             temp_dir = os.path.join(".cache", "temp")
             os.makedirs(temp_dir, exist_ok=True)
 
@@ -2424,11 +2448,17 @@ class JapaneseASMRApp(tk.Tk):
             try:
                 self._log(f"\n--- [{idx+1}/{total_items}] Memproses {rjid} ---")
 
-                # 0. Deteksi Semua Track (Multi-track & Omake)
+                # 0. Deteksi Semua Track (Multi-track & Omake / asmr.one fallback)
                 self._update_progress(base_pct + item_step * 0.05, f"[{idx+1}/{total_items}] Memindai track audio...")
                 self._log("[0/3] Mendeteksi jumlah track audio...")
                 tracks = discover_all_audio_tracks(rjid, REFERER, USER_AGENT)
                 track_names = [t["name"] for t in tracks]
+                source_type = tracks[0].get("source", "japaneseasmr") if tracks else "japaneseasmr"
+                if source_type == "asmr.one":
+                    self._log(f"[i] Sumber audio: asmrone (Fallback aktif)")
+                else:
+                    self._log(f"[i] Sumber audio: JapaneseASMR (Utama)")
+
                 if len(tracks) > 1:
                     self._log(f"[i] Terdeteksi {len(tracks)} track ({', '.join(track_names)}). Semua akan digabung otomatis!")
                 else:
@@ -2440,11 +2470,57 @@ class JapaneseASMRApp(tk.Tk):
                 # 1. Download & Standardize Cover to JPEG (agar terbaca Windows Explorer)
                 self._update_progress(base_pct + item_step * 0.15, f"[{idx+1}/{total_items}] Mengunduh cover art...")
                 self._log("[1/3] Mengunduh cover art...")
-                req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
-                with urllib.request.urlopen(req, timeout=10) as resp:
-                    img_bytes = resp.read()
-                with Image.open(io.BytesIO(img_bytes)) as pil_c:
-                    pil_c.convert("RGB").save(temp_cover, "JPEG", quality=92)
+
+                cache_cover_file = os.path.join(".cache", "covers", f"{rjid}.jpg")
+                cover_downloaded = False
+
+                if os.path.exists(cache_cover_file):
+                    try:
+                        with Image.open(cache_cover_file) as pil_c:
+                            pil_c.convert("RGB").save(temp_cover, "JPEG", quality=92)
+                        cover_downloaded = True
+                    except Exception:
+                        pass
+
+                if not cover_downloaded:
+                    candidates = []
+                    if cover_url:
+                        candidates.append(cover_url)
+                    alt_c = resolve_best_cover_url(rjid, item.get("dlsite_cover_url"))
+                    if alt_c and alt_c not in candidates:
+                        candidates.append(alt_c)
+                    num_id = re.sub(r'^[A-Za-z]+', '', rjid)
+                    if num_id:
+                        asmr_c = f"https://api.asmr.one/api/cover/{num_id}.jpg?type=main"
+                        if asmr_c not in candidates:
+                            candidates.append(asmr_c)
+
+                    for c_url in candidates:
+                        try:
+                            cover_ref = "https://www.dlsite.com" if "dlsite" in c_url else ("https://asmr.one/" if "asmr.one" in c_url else REFERER)
+                            req = urllib.request.Request(
+                                c_url,
+                                headers={
+                                    "Referer": cover_ref,
+                                    "User-Agent": USER_AGENT,
+                                    "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                                },
+                            )
+                            with urllib.request.urlopen(req, timeout=10) as resp:
+                                img_bytes = resp.read()
+                            with Image.open(io.BytesIO(img_bytes)) as pil_c:
+                                pil_c.convert("RGB").save(temp_cover, "JPEG", quality=92)
+                                os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
+                                pil_c.convert("RGB").save(cache_cover_file, "JPEG", quality=85)
+                            cover_downloaded = True
+                            break
+                        except Exception:
+                            continue
+
+                if not cover_downloaded:
+                    self._log("[!] Cover art online tidak ditemukan, menggunakan cover placeholder default.")
+                    blank_img = Image.new("RGB", (600, 600), color=(30, 30, 46))
+                    blank_img.save(temp_cover, "JPEG", quality=90)
 
                 if self.stop_requested:
                     break
@@ -2457,6 +2533,7 @@ class JapaneseASMRApp(tk.Tk):
 
                     t_name = track_info["name"]
                     t_url = track_info["url"]
+                    t_ref = track_info.get("referer", REFERER)
                     t_out_tmpl = os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.%(ext)s")
                     t_final_mp3 = os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp3")
 
@@ -2494,8 +2571,9 @@ class JapaneseASMRApp(tk.Tk):
                         "--downloader", aria2c_bin,
                         "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --summary-interval=1",
                         "--fixup", "never",
-                        "--add-header", f"Referer: {REFERER}",
-                        "--add-header", f"Origin: {REFERER}",
+                        "--add-header", f"Referer: {t_ref}",
+                        "--add-header", f"Origin: {t_ref}",
+                        "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
                         "--user-agent", USER_AGENT,
                         t_url,
                         "-x",
@@ -2641,7 +2719,7 @@ class JapaneseASMRApp(tk.Tk):
                         "-map", "0:a",
                         "-map", "1:v",
                         "-c:a", "libmp3lame",
-                        "-q:a", "2",
+                        "-b:a", "192k",
                         "-c:v", "mjpeg",
                         "-disposition:v:0", "attached_pic",
                         "-id3v2_version", "3",
@@ -2768,6 +2846,29 @@ class JapaneseASMRApp(tk.Tk):
     # ==========================================
     # PEMUTAR AUDIO BAWAAN (WINDOWS NATIVE MCI)
     # ==========================================
+    def _get_precise_duration_ms(self, file_path):
+        """
+        Mendapatkan durasi presisi berkas audio (dalam milidetik) via FFmpeg
+        untuk mencegah distorsi panjang durasi akibat bug VBR Windows MCI.
+        """
+        try:
+            ffmpeg_bin = get_bin_executable("ffmpeg")
+            cmd = [ffmpeg_bin, "-hide_banner", "-i", file_path]
+            res = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            )
+            txt = res.stderr.decode("utf-8", errors="ignore")
+            m = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', txt)
+            if m:
+                h, mi, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
+                return int((h * 3600 + mi * 60 + s) * 1000)
+        except Exception:
+            pass
+        return 0
+
     def _mci_send(self, command):
         if sys.platform != "win32":
             return 0, ""
@@ -2776,27 +2877,128 @@ class JapaneseASMRApp(tk.Tk):
         return err, buf.value
 
     def _refresh_playlist_view(self):
-        """Memuat ulang daftar audio yang tersedia di riwayat/folder untuk dimainkan."""
+        """
+        Memuat ulang daftar audio yang tersedia di riwayat serta memindai
+        seluruh isi folder penyimpanan (termasuk semua subfolder di dalamnya).
+        """
         self.player_tree.delete(*self.player_tree.get_children())
         histories = load_history()
         self.playlist_items = []
 
+        seen_paths = set()
+        hist_by_rjid = {}
+
+        for h in histories:
+            r_id = h.get("rjid", "").strip().upper()
+            if r_id and r_id != "-":
+                hist_by_rjid[r_id] = h
+
+        # 1. Masukkan berkas dari riwayat yang masih ada di disk
         for h in histories:
             fpath = h.get("output_path", "")
-            if os.path.exists(fpath):
-                self.playlist_items.append(h)
-                idx = len(self.playlist_items) - 1
-                self.player_tree.insert(
-                    "",
-                    "end",
-                    iid=str(idx),
-                    values=(
-                        h.get("rjid", "-"),
-                        h.get("title", "-"),
-                        h.get("cv", "-"),
-                        h.get("file_size", "-"),
-                    ),
-                )
+            if fpath and os.path.exists(fpath):
+                norm_p = os.path.normcase(os.path.abspath(fpath))
+                if norm_p not in seen_paths:
+                    seen_paths.add(norm_p)
+                    self.playlist_items.append(h)
+
+        # 2. Pindai folder penyimpanan download secara rekursif (termasuk subfolder)
+        download_dir = os.path.abspath(get_download_dir())
+        AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".wma"}
+
+        if os.path.exists(download_dir):
+            for root, dirs, files in os.walk(download_dir, followlinks=False):
+                # Lewati direktori sistem / cache / temp
+                dirs[:] = [
+                    d for d in dirs
+                    if not d.startswith(".")
+                    and not d.startswith("temp_")
+                    and d.lower() != "$recycle.bin"
+                ]
+
+                # Cari gambar cover lokal jika ada di subfolder yang sama
+                local_cover = None
+                img_candidates = [
+                    f for f in files
+                    if os.path.splitext(f)[1].lower() in {".jpg", ".jpeg", ".png", ".webp"}
+                ]
+                if img_candidates:
+                    pref_covers = [
+                        f for f in img_candidates
+                        if any(k in f.lower() for k in ["cover", "folder", "thumb", "main", "img"])
+                    ]
+                    chosen_img = pref_covers[0] if pref_covers else img_candidates[0]
+                    local_cover = os.path.abspath(os.path.join(root, chosen_img))
+
+                for f in sorted(files):
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in AUDIO_EXTS:
+                        full_path = os.path.abspath(os.path.join(root, f))
+                        norm_p = os.path.normcase(full_path)
+                        if norm_p in seen_paths:
+                            continue
+                        seen_paths.add(norm_p)
+
+                        # Deteksi ID RJ dari nama berkas atau nama subfolder
+                        match = re.search(r"(RJ\d+|VJ\d+|BJ\d+)", f, re.IGNORECASE)
+                        if not match:
+                            match = re.search(r"(RJ\d+|VJ\d+|BJ\d+)", os.path.basename(root), re.IGNORECASE)
+
+                        rjid_detected = match.group(1).upper() if match else "-"
+                        ref_meta = hist_by_rjid.get(rjid_detected) if rjid_detected != "-" else None
+
+                        # Hitung ukuran berkas
+                        try:
+                            fsize = os.path.getsize(full_path)
+                            if fsize >= 1024 * 1024 * 1024:
+                                size_str = f"{fsize / (1024 * 1024 * 1024):.2f} GB"
+                            else:
+                                size_str = f"{fsize / (1024 * 1024):.1f} MB"
+                        except OSError:
+                            size_str = "-"
+
+                        # Judul karya
+                        base_name_no_ext = os.path.splitext(f)[0]
+                        clean_name = re.sub(r"^\[(?:RJ|VJ|BJ)\d+\]\s*", "", base_name_no_ext).strip()
+                        rel_sub = os.path.relpath(root, download_dir)
+                        if rel_sub != "." and not clean_name.lower().startswith(rel_sub.lower()):
+                            title_display = f"{clean_name} ({rel_sub})"
+                        else:
+                            title_display = clean_name or base_name_no_ext
+
+                        cv_display = ref_meta.get("cv", "-") if ref_meta else "-"
+                        circle_display = ref_meta.get("circle", "-") if ref_meta else "-"
+                        cover_to_use = local_cover or (ref_meta.get("cover_url", "") if ref_meta else "")
+                        if not cover_to_use and rjid_detected != "-":
+                            cover_to_use = f"https://pic.weeabo0.xyz/{rjid_detected}_img_main.jpg"
+
+                        item = {
+                            "rjid": rjid_detected,
+                            "title": title_display,
+                            "cv": cv_display,
+                            "circle": circle_display,
+                            "file_size": size_str,
+                            "output_path": full_path,
+                            "cover_url": cover_to_use,
+                        }
+                        self.playlist_items.append(item)
+
+        # Masukkan ke Treeview Playlist
+        for idx, item in enumerate(self.playlist_items):
+            self.player_tree.insert(
+                "",
+                "end",
+                iid=str(idx),
+                values=(
+                    item.get("rjid", "-"),
+                    item.get("title", "-"),
+                    item.get("cv", "-"),
+                    item.get("file_size", "-"),
+                ),
+            )
+
+        if hasattr(self, "lbl_p_title"):
+            self.lbl_p_title.config(text=f"Daftar Putar / Koleksi Audio ({len(self.playlist_items)} Track)")
 
     def _on_playlist_select(self, event):
         selected = self.player_tree.selection()
@@ -2827,15 +3029,28 @@ class JapaneseASMRApp(tk.Tk):
         self._mci_send("close asmr_player")
         err, _ = self._mci_send(f'open "{short_path}" type mpegvideo alias asmr_player')
         if err != 0:
+            err, _ = self._mci_send(f'open "{short_path}" alias asmr_player')
+        if err != 0:
             show_dark_error(self, "Gagal Memutar", "Format audio tidak dapat diputar oleh sistem MCI.")
             return
 
         self._mci_send("set asmr_player time format milliseconds")
         _, len_str = self._mci_send("status asmr_player length")
         try:
-            self.player_duration_ms = int(len_str)
+            mci_len = int(len_str)
         except ValueError:
-            self.player_duration_ms = 0
+            mci_len = 0
+
+        self.mci_raw_duration_ms = mci_len if mci_len > 0 else 0
+
+        # Ambil durasi presisi via FFmpeg agar tidak terdistorsi bug VBR Windows MCI
+        precise_dur = self._get_precise_duration_ms(short_path)
+        if precise_dur > 0:
+            self.player_duration_ms = precise_dur
+            if self.mci_raw_duration_ms <= 0:
+                self.mci_raw_duration_ms = precise_dur
+        else:
+            self.player_duration_ms = self.mci_raw_duration_ms
 
         self._mci_send("play asmr_player")
         self.is_playing = True
@@ -2861,6 +3076,19 @@ class JapaneseASMRApp(tk.Tk):
         self._player_schedule_tick()
 
     def _render_player_cover(self, rjid, cover_url):
+        # 1. Cek jika cover_url adalah file gambar lokal di disk
+        if cover_url and os.path.exists(cover_url):
+            try:
+                pil_img = Image.open(cover_url)
+                pil_img.thumbnail((290, 195))
+                self.player_preview_image = ImageTk.PhotoImage(pil_img)
+                self.player_canvas.delete("all")
+                self.player_canvas.create_image(145, 97, image=self.player_preview_image)
+                return
+            except Exception:
+                pass
+
+        # 2. Cek cache thumbnail lokal .cache/covers/{rjid}.jpg
         cache_file = os.path.join(".cache", "covers", f"{rjid}.jpg")
         if os.path.exists(cache_file):
             try:
@@ -2873,16 +3101,26 @@ class JapaneseASMRApp(tk.Tk):
             except Exception:
                 pass
 
-        if cover_url:
+        # 3. Muat gambar dari jaringan jika berupa HTTP/HTTPS URL
+        if cover_url and (cover_url.startswith("http://") or cover_url.startswith("https://")):
             def load_cover():
                 try:
-                    req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
+                    cover_ref = "https://www.dlsite.com" if "dlsite" in cover_url else ("https://asmr.one/" if "asmr.one" in cover_url else REFERER)
+                    req = urllib.request.Request(
+                        cover_url,
+                        headers={
+                            "Referer": cover_ref,
+                            "User-Agent": USER_AGENT,
+                            "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                        },
+                    )
                     with urllib.request.urlopen(req, timeout=5) as resp:
                         img_data = resp.read()
                     pil_img = Image.open(io.BytesIO(img_data))
                     pil_img.thumbnail((290, 195))
                     os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
-                    pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
+                    if rjid and rjid != "-":
+                        pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
                     self.player_preview_image = ImageTk.PhotoImage(pil_img)
                     self.player_canvas.delete("all")
                     self.player_canvas.create_image(145, 97, image=self.player_preview_image)
@@ -2929,7 +3167,8 @@ class JapaneseASMRApp(tk.Tk):
         if not self.current_playing_file or self.player_duration_ms <= 0:
             return
         target_pct = self.timeline_slider.get()
-        target_ms = int(float(target_pct) * self.player_duration_ms / 100.0)
+        ref_len = self.mci_raw_duration_ms if self.mci_raw_duration_ms > 0 else self.player_duration_ms
+        target_ms = int(float(target_pct) * ref_len / 100.0)
         self._mci_send(f"seek asmr_player to {target_ms}")
         if self.is_playing:
             self._mci_send("play asmr_player")
@@ -2977,17 +3216,25 @@ class JapaneseASMRApp(tk.Tk):
         _, mode_str = self._mci_send("status asmr_player mode")
 
         try:
-            pos_ms = int(pos_str)
+            mci_pos_ms = int(pos_str)
         except ValueError:
-            pos_ms = 0
+            mci_pos_ms = 0
+
+        ref_len = self.mci_raw_duration_ms if self.mci_raw_duration_ms > 0 else self.player_duration_ms
+        if ref_len > 0:
+            ratio = max(0.0, min(1.0, mci_pos_ms / float(ref_len)))
+        else:
+            ratio = 0.0
+
+        real_pos_ms = int(ratio * self.player_duration_ms)
 
         if not self.is_user_dragging_slider and self.player_duration_ms > 0:
-            pct = (pos_ms / self.player_duration_ms) * 100.0
+            pct = ratio * 100.0
             self.timeline_slider.set(pct)
-            self.lbl_time_cur.config(text=self._format_time(pos_ms))
+            self.lbl_time_cur.config(text=self._format_time(real_pos_ms))
 
         # Cek jika track selesai
-        if mode_str == "stopped" or (self.player_duration_ms > 0 and pos_ms >= self.player_duration_ms - 500):
+        if mode_str == "stopped" or (ref_len > 0 and mci_pos_ms >= ref_len - 500):
             if self.is_looping:
                 self._mci_send("seek asmr_player to start")
                 self._mci_send("play asmr_player")

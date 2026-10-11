@@ -307,24 +307,155 @@ def check_url_exists(url, referer="https://japaneseasmr.com", user_agent="Mozill
     return False
 
 
+ASMRONE_HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+    "Referer": "https://asmr.one/",
+    "Origin": "https://asmr.one",
+    "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+}
+
+
+def _natural_sort_key(s):
+    import re
+    return [int(text) if text.isdigit() else text.lower() for text in re.split(r'(\d+)', s)]
+
+
+def fetch_asmrone_tree(numeric_id):
+    """Mengambil pohon direktori file audio dari asmr.one API dengan bypass header WAF."""
+    import urllib.request
+    url = f"https://api.asmr.one/api/tracks/{numeric_id}"
+    req = urllib.request.Request(url, headers=ASMRONE_HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=7) as resp:
+            if resp.status == 200:
+                return json.loads(resp.read().decode("utf-8", errors="ignore"))
+    except Exception:
+        pass
+    return None
+
+
+def filter_smart_asmrone_tracks(tree):
+    """
+    Menyaring dan memilih hanya track cerita utama (本編) dari pohon direktori asmr.one:
+    1. Filter hanya format audio valid.
+    2. Jika di root langsung ada track bernomor urut (seperti RJ386444), pilih itu.
+    3. Jika di dalam subfolder, utamakan folder '本編' / 'main' dan hindari varian (SE無, 原本, cuaca, sistem).
+    4. Deduplikasi format: Jika ada MP3 dan WAV, utamakan MP3.
+    5. Urutkan track secara kronologis alami.
+    """
+    import re
+    AUDIO_EXTS = ('.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg')
+
+    # 1. Kumpulkan semua audio yang ada di level root
+    root_audios = []
+    for item in tree:
+        if item.get("type") == "audio" and (item.get("mediaStreamUrl") or item.get("mediaDownloadUrl")):
+            title = item.get("title", "")
+            if any(title.lower().endswith(ext) for ext in AUDIO_EXTS):
+                root_audios.append({
+                    "name": re.sub(r'\.[a-zA-Z0-9]+$', '', title),
+                    "url": item.get("mediaDownloadUrl") or item.get("mediaStreamUrl"),
+                    "title": title,
+                    "referer": "https://asmr.one/",
+                    "source": "asmr.one",
+                })
+
+    # Cek apakah root_audios memiliki pola nomor urut cerita (01, 02, ...)
+    numbered_root = [a for a in root_audios if re.match(r'^\s*0?\d+', a["title"])]
+    if len(numbered_root) >= 2 or (len(root_audios) > 0 and len(numbered_root) == len(root_audios)):
+        numbered_root.sort(key=lambda x: _natural_sort_key(x["title"]))
+        return numbered_root
+
+    # 2. Skoring folder jika track berada dalam subfolder
+    folders = [item for item in tree if item.get("type") == "folder"]
+
+    def folder_score(f_title):
+        score = 0
+        ft_lower = f_title.lower()
+        if "本編" in f_title or "main" in ft_lower or "track" in ft_lower:
+            score += 100
+        penalties = ["se無し", "se無", "音声原本", "原本", "システムボイス", "システム音", "効果音", "bgm", "昭和音質", "木枯らし", "雨降り", "se強化"]
+        if any(neg in ft_lower for neg in penalties):
+            score -= 80
+        if "おまけ" in f_title and "本編" not in f_title:
+            score -= 20
+        return score
+
+    folders.sort(key=lambda f: folder_score(f.get("title", "")), reverse=True)
+
+    def extract_audios_from_node(node):
+        audios = []
+        if node.get("type") == "audio" and (node.get("mediaStreamUrl") or node.get("mediaDownloadUrl")):
+            t = node.get("title", "")
+            if any(t.lower().endswith(ext) for ext in AUDIO_EXTS):
+                audios.append({
+                    "name": re.sub(r'\.[a-zA-Z0-9]+$', '', t),
+                    "url": node.get("mediaDownloadUrl") or node.get("mediaStreamUrl"),
+                    "title": t,
+                    "referer": "https://asmr.one/",
+                    "source": "asmr.one",
+                })
+        for c in node.get("children", []):
+            audios.extend(extract_audios_from_node(c))
+        return audios
+
+    for best_f in folders:
+        sub_children = best_f.get("children", [])
+        mp3_folder = next((c for c in sub_children if c.get("type") == "folder" and "mp3" in c.get("title", "").lower()), None)
+        wav_folder = next((c for c in sub_children if c.get("type") == "folder" and "wav" in c.get("title", "").lower()), None)
+
+        target_node = mp3_folder if mp3_folder else (wav_folder if wav_folder else best_f)
+        tracks = extract_audios_from_node(target_node)
+        if tracks:
+            seen_bases = {}
+            filtered = []
+            for tr in tracks:
+                base = tr["name"].lower()
+                if base not in seen_bases:
+                    seen_bases[base] = tr
+                    filtered.append(tr)
+                elif tr["title"].lower().endswith(".mp3") and seen_bases[base]["title"].lower().endswith(".wav"):
+                    filtered.remove(seen_bases[base])
+                    seen_bases[base] = tr
+                    filtered.append(tr)
+
+            filtered.sort(key=lambda x: _natural_sort_key(x["title"]))
+            return filtered
+
+    # Fallback terakhir jika tidak ada folder unggulan
+    all_audios = []
+    for item in tree:
+        all_audios.extend(extract_audios_from_node(item))
+    unique_audios = []
+    seen = set()
+    for a in all_audios:
+        b = a["name"].lower()
+        if b not in seen:
+            seen.add(b)
+            unique_audios.append(a)
+    unique_audios.sort(key=lambda x: _natural_sort_key(x["title"]))
+    return unique_audios
+
+
 def discover_all_audio_tracks(rj_id, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):
     """
-    Mendeteksi semua track audio (Track 1, Track 2, ..., Omake, Bonus) untuk satu Kode RJ.
-    - Jika stream .m3u8 tersedia, dipastikan hanya 1 track (langsung dikembalikan tanpa scan multi-track).
-    - Jika stream bertipe .mp3 direct, sistem akan memindai kemungkinan multi-track dan omake.
+    Mendeteksi semua track audio (Track 1, Track 2, ..., Omake, Bonus) untuk satu Kode RJ:
+    1. Cek sumber utama: JapaneseASMR (.m3u8 master atau .mp3 multi-track).
+    2. Jika tidak ditemukan di sumber utama, otomatis fallback ke asmr.one API via Smart Track Filter.
     """
+    import re
     clean_id = rj_id.strip()
     if clean_id.startswith("http://") or clean_id.startswith("https://"):
-        return [{"name": "Track 1", "url": clean_id}]
+        return [{"name": "Track 1", "url": clean_id, "referer": referer, "source": "direct"}]
 
-    # 1. Cek apakah ada file master HLS .m3u8 (m3u8 selalu 1 track tunggal utuh)
+    # 1. Cek apakah ada file master HLS .m3u8 di JapaneseASMR
     m3u8_url = f"https://v.weeab0o.xyz/{clean_id}.m3u8"
     if check_url_exists(m3u8_url, referer, user_agent):
-        return [{"name": "Track 1", "url": m3u8_url}]
+        return [{"name": "Track 1", "url": m3u8_url, "referer": referer, "source": "japaneseasmr"}]
 
     found_tracks = []
 
-    # 2. Cek Track 1 (.mp3)
+    # 2. Cek Track 1 (.mp3) di JapaneseASMR
     t1_candidates = [
         f"https://v.weeab0o.xyz/{clean_id}.mp3",
         f"https://v.weeab0o.xyz/{clean_id}%201.mp3",
@@ -338,61 +469,70 @@ def discover_all_audio_tracks(rj_id, referer="https://japaneseasmr.com", user_ag
             break
 
     if t1_url:
-        found_tracks.append({"name": "Track 1", "url": t1_url})
-    else:
-        found_tracks.append({"name": "Track 1", "url": t1_candidates[0]})
+        found_tracks.append({"name": "Track 1", "url": t1_url, "referer": referer, "source": "japaneseasmr"})
 
-    # 3. Cek Track 2 s/d 20 (.mp3)
-    for track_num in range(2, 21):
-        num_candidates = [
-            f"https://v.weeab0o.xyz/{clean_id}%20{track_num}.mp3",
-            f"https://v.weeab0o.xyz/{clean_id}_{track_num}.mp3",
-            f"https://v.weeab0o.xyz/{clean_id}-{track_num}.mp3",
-            f"https://v.weeab0o.xyz/{clean_id}{track_num}.mp3",
+        # 3. Cek Track 2 s/d 20 (.mp3)
+        for track_num in range(2, 21):
+            num_candidates = [
+                f"https://v.weeab0o.xyz/{clean_id}%20{track_num}.mp3",
+                f"https://v.weeab0o.xyz/{clean_id}_{track_num}.mp3",
+                f"https://v.weeab0o.xyz/{clean_id}-{track_num}.mp3",
+                f"https://v.weeab0o.xyz/{clean_id}{track_num}.mp3",
+            ]
+            matched_url = None
+            for url in num_candidates:
+                if check_url_exists(url, referer, user_agent):
+                    matched_url = url
+                    break
+            if matched_url:
+                found_tracks.append({"name": f"Track {track_num}", "url": matched_url, "referer": referer, "source": "japaneseasmr"})
+            else:
+                if track_num >= 4:
+                    break
+
+        # 4. Cek Omake / Bonus / Tokuten / EX (.mp3)
+        omake_patterns = [
+            ("Omake", f"https://v.weeab0o.xyz/{clean_id}omake.mp3"),
+            ("Omake", f"https://v.weeab0o.xyz/{clean_id}%20omake.mp3"),
+            ("Omake", f"https://v.weeab0o.xyz/{clean_id}_omake.mp3"),
+            ("Omake", f"https://v.weeab0o.xyz/{clean_id}-omake.mp3"),
+            ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}omake1.mp3"),
+            ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}%20omake%201.mp3"),
+            ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}omake2.mp3"),
+            ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}%20omake%202.mp3"),
+            ("Bonus", f"https://v.weeab0o.xyz/{clean_id}bonus.mp3"),
+            ("Bonus", f"https://v.weeab0o.xyz/{clean_id}%20bonus.mp3"),
+            ("Bonus", f"https://v.weeab0o.xyz/{clean_id}_bonus.mp3"),
+            ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}tokuten.mp3"),
+            ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}%20tokuten.mp3"),
+            ("EX", f"https://v.weeab0o.xyz/{clean_id}%20ex.mp3"),
+            ("EX", f"https://v.weeab0o.xyz/{clean_id}ex.mp3"),
+            ("EX", f"https://v.weeab0o.xyz/{clean_id}_ex.mp3"),
+            ("EX", f"https://v.weeab0o.xyz/{clean_id}-ex.mp3"),
+            ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex%201.mp3"),
+            ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex1.mp3"),
+            ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex%202.mp3"),
+            ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex2.mp3"),
         ]
-        matched_url = None
-        for url in num_candidates:
-            if check_url_exists(url, referer, user_agent):
-                matched_url = url
-                break
-        if matched_url:
-            found_tracks.append({"name": f"Track {track_num}", "url": matched_url})
-        else:
-            if track_num >= 4:
-                # Jika track berturut-turut tidak ada, hentikan scanning angka
-                break
+        seen_urls = {t["url"] for t in found_tracks}
+        for om_name, om_url in omake_patterns:
+            if om_url not in seen_urls and check_url_exists(om_url, referer, user_agent):
+                found_tracks.append({"name": om_name, "url": om_url, "referer": referer, "source": "japaneseasmr"})
+                seen_urls.add(om_url)
 
-    # 4. Cek Omake / Bonus / Tokuten / EX (.mp3)
-    omake_patterns = [
-        ("Omake", f"https://v.weeab0o.xyz/{clean_id}omake.mp3"),
-        ("Omake", f"https://v.weeab0o.xyz/{clean_id}%20omake.mp3"),
-        ("Omake", f"https://v.weeab0o.xyz/{clean_id}_omake.mp3"),
-        ("Omake", f"https://v.weeab0o.xyz/{clean_id}-omake.mp3"),
-        ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}omake1.mp3"),
-        ("Omake 1", f"https://v.weeab0o.xyz/{clean_id}%20omake%201.mp3"),
-        ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}omake2.mp3"),
-        ("Omake 2", f"https://v.weeab0o.xyz/{clean_id}%20omake%202.mp3"),
-        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}bonus.mp3"),
-        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}%20bonus.mp3"),
-        ("Bonus", f"https://v.weeab0o.xyz/{clean_id}_bonus.mp3"),
-        ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}tokuten.mp3"),
-        ("Tokuten", f"https://v.weeab0o.xyz/{clean_id}%20tokuten.mp3"),
-        ("EX", f"https://v.weeab0o.xyz/{clean_id}%20ex.mp3"),
-        ("EX", f"https://v.weeab0o.xyz/{clean_id}ex.mp3"),
-        ("EX", f"https://v.weeab0o.xyz/{clean_id}_ex.mp3"),
-        ("EX", f"https://v.weeab0o.xyz/{clean_id}-ex.mp3"),
-        ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex%201.mp3"),
-        ("EX 1", f"https://v.weeab0o.xyz/{clean_id}%20ex1.mp3"),
-        ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex%202.mp3"),
-        ("EX 2", f"https://v.weeab0o.xyz/{clean_id}%20ex2.mp3"),
-    ]
-    seen_urls = {t["url"] for t in found_tracks}
-    for om_name, om_url in omake_patterns:
-        if om_url not in seen_urls and check_url_exists(om_url, referer, user_agent):
-            found_tracks.append({"name": om_name, "url": om_url})
-            seen_urls.add(om_url)
+        return found_tracks
 
-    return found_tracks
+    # 5. Fallback ke asmr.one jika sumber JapaneseASMR tidak ditemukan
+    num_id = re.sub(r'^[A-Za-z]+', '', clean_id)
+    if num_id:
+        asmrone_tree = fetch_asmrone_tree(num_id)
+        if asmrone_tree:
+            asmr_tracks = filter_smart_asmrone_tracks(asmrone_tree)
+            if asmr_tracks:
+                return asmr_tracks
+
+    # Fallback terakhir
+    return [{"name": "Track 1", "url": t1_candidates[0], "referer": referer, "source": "japaneseasmr"}]
 
 
 def resolve_audio_url(rj_id, referer="https://japaneseasmr.com", user_agent="Mozilla/5.0"):

@@ -1,4 +1,5 @@
 import html
+import json
 import re
 import urllib.request
 
@@ -15,8 +16,108 @@ def sanitize_filename(name):
     return clean if clean else "audio"
 
 
+def check_url_accessible(url, referer="https://japaneseasmr.com", user_agent=USER_AGENT, timeout=3.5):
+    """Mengecek apakah URL gambar/audio dapat diakses (HTTP 200/206)."""
+    headers = {"User-Agent": user_agent, "Range": "bytes=0-10"}
+    if referer:
+        headers["Referer"] = referer
+    req = urllib.request.Request(url, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            if resp.status in (200, 206):
+                return True
+    except Exception:
+        pass
+    return False
+
+
+def resolve_best_cover_url(rj_id, dlsite_cover=None):
+    """
+    Menentukan URL gambar cover terbaik dengan alur fallback:
+    1. pic.weeabo0.xyz (JapaneseASMR) jika tersedia.
+    2. DLsite HD Cover (og:image / modpub) jika tersedia.
+    3. asmr.one cover art (mainCoverUrl).
+    4. Fallback default ke pic.weeabo0.xyz.
+    """
+    clean_id = rj_id.strip().upper()
+    weeabo_url = f"https://pic.weeabo0.xyz/{clean_id}_img_main.jpg"
+    if check_url_accessible(weeabo_url, referer="https://japaneseasmr.com"):
+        return weeabo_url
+
+    if dlsite_cover and check_url_accessible(dlsite_cover, referer="https://www.dlsite.com"):
+        return dlsite_cover
+
+    # Fallback ke asmr.one
+    num_id = re.sub(r'^[A-Za-z]+', '', clean_id)
+    if num_id:
+        asmrone_cover = f"https://api.asmr.one/api/cover/{num_id}.jpg?type=main"
+        if check_url_accessible(asmrone_cover, referer="https://asmr.one/"):
+            return asmrone_cover
+
+    return weeabo_url
+
+
+def enrich_metadata_from_asmrone(rj_id, info):
+    """
+    Fallback untuk karya yang terkena geo-blocking DLsite atau yang tabel outlinenya tidak ter-render.
+    Mengambil CV/Seiyuu dan Genre/Tag dari asmr.one API yang tidak dibatasi region.
+    """
+    clean_id = rj_id.strip().upper()
+    num_id = re.sub(r'^[A-Za-z]+', '', clean_id)
+    if not num_id:
+        return info
+
+    url = f"https://api.asmr.one/api/work/{num_id}"
+    req = urllib.request.Request(
+        url,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Referer": "https://asmr.one/",
+            "Accept-Language": "ja-JP,ja;q=0.9,en;q=0.8",
+        },
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=4.5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+
+            # 1. CV / Seiyuu
+            if info.get("cv") == "-" and data.get("vas"):
+                vas = [v.get("name", "").strip() for v in data.get("vas", []) if v.get("name")]
+                if vas:
+                    info["cv"] = ", ".join(vas)
+
+            # 2. Genre / Tags (utamakan tag Jepang melalui i18n jika ada agar seragam dengan DLsite)
+            if info.get("genre") == "-" and data.get("tags"):
+                tags = []
+                for t in data.get("tags", []):
+                    i18n_ja = t.get("i18n", {}).get("ja-jp", {}).get("name") if isinstance(t.get("i18n"), dict) else None
+                    name = i18n_ja or t.get("name")
+                    if name and name.strip() and name.strip() not in tags:
+                        tags.append(name.strip())
+                if tags:
+                    info["genre"] = ", ".join(tags)
+
+            # 3. Circle / Maker jika masih '-'
+            if info.get("circle") == "-":
+                c = data.get("circle")
+                if isinstance(c, dict) and c.get("name"):
+                    info["circle"] = c["name"].strip()
+                elif data.get("name"):
+                    info["circle"] = str(data["name"]).strip()
+
+            # 4. Age Rating jika masih '-'
+            if info.get("age_rating") == "-":
+                age = data.get("age_category_string")
+                if age:
+                    info["age_rating"] = str(age).strip()
+    except Exception:
+        pass
+
+    return info
+
+
 def fetch_dlsite_metadata(rj_id):
-    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating) langsung dari DLsite resmi."""
+    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating, Cover HD) langsung dari DLsite resmi."""
     clean_id = rj_id.strip().upper()
     info = {
         "title": clean_id,
@@ -25,6 +126,7 @@ def fetch_dlsite_metadata(rj_id):
         "genre": "-",
         "age_rating": "-",
         "cover_url": f"https://pic.weeabo0.xyz/{clean_id}_img_main.jpg",
+        "dlsite_cover_url": None,
     }
     urls = [
         f"https://www.dlsite.com/maniax/work/=/product_id/{clean_id}.html",
@@ -44,6 +146,13 @@ def fetch_dlsite_metadata(rj_id):
             )
             with urllib.request.urlopen(req, timeout=6) as resp:
                 page_html = resp.read().decode("utf-8", errors="ignore")
+
+            # 0. Ambil Cover HD Resmi dari og:image DLsite
+            og_match = re.search(r'<meta\s+property=["\']og:image["\']\s+content=["\'](.*?)["\']', page_html, re.IGNORECASE)
+            if not og_match:
+                og_match = re.search(r'<meta\s+name=["\']twitter:image["\']\s+content=["\'](.*?)["\']', page_html, re.IGNORECASE)
+            if og_match:
+                info["dlsite_cover_url"] = html.unescape(og_match.group(1).strip())
 
             # 1. Ambil Judul
             title_match = re.search(r'<meta itemprop="name" content="(.*?)">', page_html)
@@ -70,7 +179,6 @@ def fetch_dlsite_metadata(rj_id):
                 if not brand_match:
                     brand_match = re.search(r'"position":\s*3,\s*"name":\s*"([^"]+)"', page_html)
                 if not brand_match:
-                    # Ambil dari tag <title> ... [Circle] | DLsite ...
                     t_match = re.search(r'\[(.*?)\]\s*\|\s*DLsite', page_html)
                     if t_match:
                         brand_match = t_match
@@ -156,4 +264,12 @@ def fetch_dlsite_metadata(rj_id):
         except Exception:
             continue
 
+    # 7. Fallback Enrichment via asmr.one jika CV atau Genre masih kosong '-'
+    # (Penyebab utama: karya terkena geo-blocking DLsite sehingga tabel detail tidak dikirim oleh server DLsite)
+    if info.get("cv") == "-" or info.get("genre") == "-" or info.get("circle") == "-":
+        info = enrich_metadata_from_asmrone(clean_id, info)
+
+    # Resolusi cover terbaik (Weeabo0 -> DLsite HD -> asmr.one)
+    info["cover_url"] = resolve_best_cover_url(clean_id, info.get("dlsite_cover_url"))
     return info
+

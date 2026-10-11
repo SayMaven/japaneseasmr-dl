@@ -19,15 +19,19 @@ Aplikasi desktop *all-in-one* modern untuk mengunduh audio JapaneseASMR, menggab
 
 ### 2. Pemutar Audio Bawaan (*Native Player*)
 - **Pemutar Musik Terintegrasi**: Langsung mendengarkan karya yang baru saja diunduh atau dari daftar riwayat tanpa perlu membuka media player eksternal.
+- **Deteksi Audio Rekursif (Termasuk Subfolder)**: Secara otomatis memindai seluruh folder lokasi simpan beserta semua subfolder di dalamnya (misal: `C:\ASMR\subfolder\...`), mengenali format `.mp3`, `.wav`, `.m4a`, `.flac`, `.aac`, `.ogg`, `.wma`, serta menampilkan cover art lokal/online yang sesuai.
 - **Kontrol Interaktif**:
   - *Timeline slider* interaktif (geser untuk lompat ke detik yang diinginkan).
   - Kontrol Volume (0% – 100%).
   - Tombol Navigasi: Putar / Jeda, Berhenti, Track Sebelumnya, dan Track Berikutnya.
   - Mode Pemutaran Berulang (*Loop Track: ON/OFF*).
 
-### 3. Engine Unduhan Berkecepatan Tinggi
+### 3. Engine Unduhan Berkecepatan Tinggi & Dual-Source Fallback
+- **Dual-Source Audio Engine**: Mengutamakan sumber utama `japaneseasmr.com` (`weeab0o.xyz`), dan secara otomatis beralih ke sumber sekunder (*fallback*) `asmr.one` jika karya belum tersedia di JapaneseASMR (misal: `RJ386444`).
+- **Smart Track Filter Heuristics**: Saat beralih ke `asmr.one`, engine secara cerdas memfilter struktur direktori dan hanya mengunduh track cerita utama (`本編`) & omake naratif, secara otomatis mengabaikan file duplikat format (WAV vs MP3), sound bites, dan variasi ambient/stem.
+- **Multi-Tier HD Cover Art Fallback**: Menjamin cover art resolusi tinggi selalu tersedia dengan urutan prioritas: CDN JapaneseASMR -> DLsite Official Full HD (`img.dlsite.jp`) -> CDN asmr.one.
 - **Akselerasi Multi-Thread**: Memanfaatkan engine `yt-dlp` yang dipercepat dengan `aria2c` (16 koneksi simultan per segmen).
-- **Penggabungan Otomatis**: Otomatis menggabungkan multi-track HLS (`.m3u8`) maupun direct link (`.mp3`) menjadi satu file MP3 utuh.
+- **Penggabungan Otomatis**: Otomatis menggabungkan multi-track HLS (`.m3u8`) maupun direct audio (`.mp3` / `.wav`) menjadi satu file MP3 utuh menggunakan `ffmpeg concat`.
 - **Penyematan Metadata ID3v2.3**: Menggunakan `ffmpeg` untuk menanamkan cover art JPEG, judul, artis (CV), album (Circle), genre, dan komentar langsung ke dalam file audio.
 - **Pembaruan Engine yt-dlp Mandiri**: Terdapat fitur pembaruan `yt-dlp` langsung di menu Pengaturan dengan pilihan channel **Stable** (rilis stabil resmi) atau **Nightly** (rilis harian fitur terbaru).
 
@@ -58,7 +62,7 @@ Sebelum menjalankan aplikasi dari *source code*, pastikan komponen berikut telah
 
 ### 1. Menggunakan Installer Windows (Direkomendasikan)
 Bagi pengguna umum, Anda **tidak perlu menginstal Python atau alat tambahan apa pun**:
-1. Unduh installer terbaru **`JapaneseASMR_Setup_v1.0.1.exe`** dari menu **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
+1. Unduh installer terbaru **`JapaneseASMR_Setup_v1.1.0.exe`** dari menu **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
 2. Jalankan installer dan ikuti petunjuk pemasangan hingga selesai.
 3. Aplikasi siap digunakan langsung dari Start Menu atau Desktop!
 

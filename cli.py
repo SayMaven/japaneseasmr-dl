@@ -13,7 +13,7 @@ from config_manager import (
     save_config,
     set_download_dir,
 )
-from dlsite_scraper import fetch_dlsite_metadata, sanitize_filename
+from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
 
 # Inisialisasi warna terminal ANSI & konfigurasi encoding UTF-8 untuk Windows
 if sys.platform == "win32":
@@ -42,7 +42,7 @@ DEFAULT_ID = "RJ01673437"
 
 def print_banner():
     print(f"\n{CYAN}{BOLD}==================================================={RESET}")
-    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader (Terminal CLI Mode){RESET}")
+    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader v1.1.0 (Terminal CLI)   {RESET}")
     print(f"{CYAN}{BOLD}==================================================={RESET}\n")
 
 
@@ -55,21 +55,55 @@ def parse_rj_ids(input_text):
     return ids if ids else [DEFAULT_ID]
 
 
-def download_cover(cover_url, output_path):
-    req = urllib.request.Request(cover_url, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
-    with urllib.request.urlopen(req) as response:
-        img_bytes = response.read()
+def download_cover(cover_url, output_path, rj_id=None, dlsite_cover=None):
+    candidates = []
+    if cover_url:
+        candidates.append(cover_url)
+    if rj_id:
+        alt = resolve_best_cover_url(rj_id, dlsite_cover)
+        if alt and alt not in candidates:
+            candidates.append(alt)
+        num_id = re.sub(r'^[A-Za-z]+', '', rj_id)
+        if num_id:
+            asmr_c = f"https://api.asmr.one/api/cover/{num_id}.jpg?type=main"
+            if asmr_c not in candidates:
+                candidates.append(asmr_c)
+
+    for c_url in candidates:
+        try:
+            cover_ref = "https://www.dlsite.com" if "dlsite" in c_url else ("https://asmr.one/" if "asmr.one" in c_url else REFERER)
+            req = urllib.request.Request(
+                c_url,
+                headers={
+                    "Referer": cover_ref,
+                    "User-Agent": USER_AGENT,
+                    "Accept-Language": "zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                img_bytes = response.read()
+            try:
+                import io
+                from PIL import Image
+                with Image.open(io.BytesIO(img_bytes)) as pil_c:
+                    pil_c.convert("RGB").save(output_path, "JPEG", quality=92)
+            except Exception:
+                with open(output_path, "wb") as out_file:
+                    out_file.write(img_bytes)
+            return True
+        except Exception:
+            continue
+
     try:
-        import io
         from PIL import Image
-        with Image.open(io.BytesIO(img_bytes)) as pil_c:
-            pil_c.convert("RGB").save(output_path, "JPEG", quality=92)
+        blank_img = Image.new("RGB", (600, 600), color=(30, 30, 46))
+        blank_img.save(output_path, "JPEG", quality=90)
+        return True
     except Exception:
-        with open(output_path, "wb") as out_file:
-            out_file.write(img_bytes)
+        return False
 
 
-def download_audio(audio_url, output_tmpl):
+def download_audio(audio_url, output_tmpl, referer=REFERER):
     ytdlp_bin = get_bin_executable("yt-dlp")
     aria2c_bin = get_bin_executable("aria2c")
     ffmpeg_bin = get_bin_executable("ffmpeg")
@@ -82,8 +116,9 @@ def download_audio(audio_url, output_tmpl):
         "--downloader", aria2c_bin,
         "--downloader-args", "aria2c:-s 16 -x 16 -k 1M",
         "--fixup", "never",
-        "--add-header", f"Referer: {REFERER}",
-        "--add-header", f"Origin: {REFERER}",
+        "--add-header", f"Referer: {referer}",
+        "--add-header", f"Origin: {referer}",
+        "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
         "--user-agent", USER_AGENT,
         audio_url,
         "-x",
@@ -123,7 +158,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
             "-map", "0:a",
             "-map", "1:v",
             "-c:a", "libmp3lame",
-            "-q:a", "2",
+            "-b:a", "192k",
             "-c:v", "mjpeg",
             "-disposition:v:0", "attached_pic",
             "-id3v2_version", "3",
@@ -229,6 +264,12 @@ def process_single_id(rj_id, current_index, total_count):
         print(f"{CYAN}[0/3] Mendeteksi track audio & omake...{RESET}")
         tracks = discover_all_audio_tracks(rj_id, REFERER, USER_AGENT)
         track_names = [t["name"] for t in tracks]
+        source_type = tracks[0].get("source", "japaneseasmr") if tracks else "japaneseasmr"
+        if source_type == "asmr.one":
+            print(f"{CYAN}[i] Sumber audio: asmr.one (Fallback aktif){RESET}")
+        else:
+            print(f"{CYAN}[i] Sumber audio: JapaneseASMR (Utama){RESET}")
+
         if len(tracks) > 1:
             print(f"{GREEN}[i] Terdeteksi {len(tracks)} track: {', '.join(track_names)}. Semua akan digabung otomatis!{RESET}")
         else:
@@ -236,13 +277,14 @@ def process_single_id(rj_id, current_index, total_count):
 
         # 1. Download Cover
         print(f"{CYAN}[1/3] Mendownload cover image...{RESET}")
-        download_cover(cover_url, temp_cover)
+        download_cover(cover_url, temp_cover, rj_id=rj_id, dlsite_cover=meta.get("dlsite_cover_url"))
 
         # 2. Download Semua Track
         downloaded_track_files = []
         for t_idx, track_info in enumerate(tracks, start=1):
             t_name = track_info["name"]
             t_url = track_info["url"]
+            t_ref = track_info.get("referer", REFERER)
             t_out_tmpl = os.path.join(temp_dir, f"temp_{rj_id}_t{t_idx}.%(ext)s")
             t_final_mp3 = os.path.join(temp_dir, f"temp_{rj_id}_t{t_idx}.mp3")
 
@@ -255,7 +297,7 @@ def process_single_id(rj_id, current_index, total_count):
             ])
 
             print(f"{CYAN}[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}] (16 koneksi)...{RESET}")
-            download_audio(t_url, t_out_tmpl)
+            download_audio(t_url, t_out_tmpl, referer=t_ref)
 
             # Deteksi file audio yang berhasil dibuat
             possible_files = [
