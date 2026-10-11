@@ -30,6 +30,7 @@ from config_manager import (
     set_download_dir,
     update_ytdlp_engine,
 )
+from dlsite_scraper import fetch_dlsite_metadata, sanitize_filename
 
 REFERER = "https://japaneseasmr.com"
 USER_AGENT = (
@@ -777,122 +778,7 @@ class SettingsDialog(tk.Toplevel):
         )
         btn_clear_hist.pack(side="left")
 
-    def _do_clear_covers(self):
-        clear_cover_cache()
-        stats = get_cache_size_info()
-        self.lbl_cover_stat.config(text=f"Cache Cover Art     : {stats['covers_count']} file ({stats['covers_size']})")
-        show_dark_info(self, "Berhasil", "Cache gambar cover art telah dibersihkan!")
-
-    def _do_clear_temp(self):
-        clear_temp_cache()
-        stats = get_cache_size_info()
-        self.lbl_temp_stat.config(text=f"File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})")
-        show_dark_info(self, "Berhasil", "Semua file sementara/temp telah dibersihkan!")
-
-    def _do_clear_history(self):
-        if ask_dark_yesno(self, "Konfirmasi", "Apakah Anda yakin ingin menghapus seluruh riwayat unduhan? (File MP3 di folder simpan tidak akan terhapus)."):
-            clear_all_history()
-            self.lbl_hist_stat.config(text="Riwayat Unduhan      : 0 karya tersimpan")
-            self.parent._load_history_view()
-            show_dark_info(self, "Berhasil", "Seluruh riwayat unduhan telah dikosongkan!")
-
-    # ==================== TAB 4: ABOUT ====================
-    def _render_about_tab(self):
-        card_about = tk.Frame(self.content_container, bg="#1e1e2e")
-        card_about.pack(fill="both", expand=True)
-
-        # Header About
-        top_row = tk.Frame(card_about, bg="#1e1e2e")
-        top_row.pack(fill="x", pady=(0, 10))
-
-        # Render Icon App jika ada
-        if hasattr(self.parent, "_icon_png_path") and self.parent._icon_png_path and os.path.exists(self.parent._icon_png_path):
-            try:
-                with Image.open(self.parent._icon_png_path) as p_img:
-                    resized = p_img.resize((64, 64), Image.Resampling.LANCZOS)
-                    self._about_logo_img = ImageTk.PhotoImage(resized)
-                    lbl_logo = tk.Label(top_row, image=self._about_logo_img, bg="#1e1e2e")
-                    lbl_logo.pack(side="left", padx=(0, 14))
-            except Exception:
-                pass
-
-        title_box = tk.Frame(top_row, bg="#1e1e2e")
-        title_box.pack(side="left", fill="x")
-
-        lbl_app_name = tk.Label(
-            title_box,
-            text="JapaneseASMR Downloader",
-            font=("Segoe UI", 14, "bold"),
-            bg="#1e1e2e",
-            fg="#50fa7b",
-            anchor="w",
-        )
-        lbl_app_name.pack(fill="x")
-
-        lbl_version = tk.Label(
-            title_box,
-            text="Versi 1.0.1 (Release Build) • Windows Edition",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#bd93f9",
-            anchor="w",
-        )
-        lbl_version.pack(fill="x")
-
-        lbl_desc = tk.Label(
-            card_about,
-            text="Aplikasi desktop all-in-one untuk mengunduh audio JapaneseASMR, menggabungkan multi-track & omake/EX secara otomatis, menyematkan cover art JPEG & metadata DLsite lengkap, serta dilengkapi pemutar audio bawaan.",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            wraplength=480,
-            justify="left",
-            anchor="w",
-        )
-        lbl_desc.pack(fill="x", pady=(4, 12))
-
-        # Developer & Tech Credits Card
-        credit_card = tk.Frame(card_about, bg="#282a36", padx=14, pady=10)
-        credit_card.pack(fill="x", pady=(0, 14))
-
-        tk.Label(credit_card, text="Pengembang : SayMaven", font=("Segoe UI", 9, "bold"), bg="#282a36", fg="#f8f8f2", anchor="w").pack(fill="x", pady=1)
-        tk.Label(credit_card, text="Teknologi   : Python 3.14, Tkinter, FFmpeg, yt-dlp, Aria2c, Nuitka C Engine", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
-        tk.Label(credit_card, text="Lisensi     : Open Source Software (Free for Personal Use)", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
-
-        # Action Link Buttons
-        link_box = tk.Frame(card_about, bg="#1e1e2e")
-        link_box.pack(fill="x")
-
-        btn_gh = tk.Button(
-            link_box,
-            text="Buka Repository GitHub",
-            font=("Segoe UI", 9, "bold"),
-            bg="#6272a4",
-            fg="#f8f8f2",
-            activebackground="#bd93f9",
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl"),
-        )
-        btn_gh.pack(side="left", padx=(0, 10))
-
-        btn_issue = tk.Button(
-            link_box,
-            text="Laporkan Bug & Fitur",
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#8be9fd",
-            activebackground="#6272a4",
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
-            command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl/issues"),
-        )
-        btn_issue.pack(side="left")
-
+    # ==================== ACTIONS: CLEAR CACHE & HISTORY ====================
     def _do_clear_covers(self):
         clear_cover_cache()
         stats = get_cache_size_info()
@@ -1037,157 +923,6 @@ class SettingsDialog(tk.Toplevel):
         if hasattr(self, "parent") and self.parent:
             self.parent._settings_dialog = None
         self.destroy()
-
-
-def sanitize_filename(name):
-    """Membersihkan karakter yang dilarang pada sistem file Windows."""
-    clean = re.sub(r'[\\/*?:"<>|]', "", name)
-    clean = clean.strip().rstrip(".")
-    return clean if clean else "audio"
-
-
-def fetch_dlsite_metadata(rj_id):
-    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating) langsung dari DLsite resmi."""
-    clean_id = rj_id.strip().upper()
-    info = {
-        "title": clean_id,
-        "cv": "-",
-        "circle": "-",
-        "genre": "-",
-        "age_rating": "-",
-        "cover_url": f"https://pic.weeabo0.xyz/{clean_id}_img_main.jpg",
-    }
-    urls = [
-        f"https://www.dlsite.com/maniax/work/=/product_id/{clean_id}.html",
-        f"https://www.dlsite.com/home/work/=/product_id/{clean_id}.html",
-        f"https://www.dlsite.com/girls/work/=/product_id/{clean_id}.html",
-        f"https://www.dlsite.com/pro/work/=/product_id/{clean_id}.html",
-    ]
-
-    for url in urls:
-        try:
-            req = urllib.request.Request(
-                url,
-                headers={
-                    "User-Agent": USER_AGENT,
-                    "Cookie": "adultchecked=1; locale=ja_JP",
-                },
-            )
-            with urllib.request.urlopen(req, timeout=6) as resp:
-                page_html = resp.read().decode("utf-8", errors="ignore")
-
-            # 1. Ambil Judul
-            title_match = re.search(r'<meta itemprop="name" content="(.*?)">', page_html)
-            if not title_match:
-                title_match = re.search(r'id=["\']work_name["\'][^>]*>(.*?)</h1>', page_html, re.DOTALL)
-            if not title_match:
-                title_match = re.search(r'<title>(.*?)</title>', page_html, re.DOTALL)
-            if title_match:
-                raw_title = re.sub(r"<[^>]+>", "", title_match.group(1)).strip()
-                raw_title = re.sub(r"\s*\[[^\]]+\]\s*\|\s*DLsite.*$", "", raw_title)
-                raw_title = raw_title.replace(" | DLsite", "").replace(" - DLsite", "").strip()
-                info["title"] = html.unescape(raw_title)
-
-            # 2. Ambil Circle / Maker
-            maker_match = re.search(r'<th>\s*(?:サークル名|ブランド名|メーカー名|著者)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
-            if maker_match:
-                makers = re.findall(r'<a[^>]*>(.*?)</a>', maker_match.group(1), re.DOTALL)
-                clean_makers = [re.sub(r'<[^>]+>', '', m).strip() for m in makers if re.sub(r'<[^>]+>', '', m).strip()]
-                if clean_makers:
-                    info["circle"] = html.unescape(", ".join(clean_makers))
-
-            if info["circle"] == "-":
-                brand_match = re.search(r'<div itemprop="brand"[^>]*>.*?<meta itemprop="name" content="(.*?)">', page_html, re.DOTALL)
-                if not brand_match:
-                    brand_match = re.search(r'"position":\s*3,\s*"name":\s*"([^"]+)"', page_html)
-                if not brand_match:
-                    # Ambil dari tag <title> ... [Circle] | DLsite ...
-                    t_match = re.search(r'\[(.*?)\]\s*\|\s*DLsite', page_html)
-                    if t_match:
-                        brand_match = t_match
-
-                if brand_match:
-                    raw_brand = html.unescape(brand_match.group(1).strip())
-                    if "/" in raw_brand:
-                        parts = raw_brand.split("/", 1)
-                        info["circle"] = parts[0].strip()
-                        if info["cv"] == "-":
-                            info["cv"] = parts[1].strip()
-                    else:
-                        info["circle"] = raw_brand
-
-            # 3. Ambil CV / Voice Actor dari Tabel
-            cv_match = re.search(r'<th>\s*(?:声優|キャラクターボイス|ボイス|キャスト)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
-            if cv_match:
-                cvs = re.findall(r'<a[^>]*>(.*?)</a>', cv_match.group(1), re.DOTALL)
-                clean_cvs = [re.sub(r'<[^>]+>', '', c).strip() for c in cvs if re.sub(r'<[^>]+>', '', c).strip()]
-                if clean_cvs:
-                    info["cv"] = html.unescape(", ".join(clean_cvs))
-                else:
-                    raw_cv_td = re.sub(r'<[^>]+>', '', cv_match.group(1)).strip()
-                    if raw_cv_td:
-                        info["cv"] = html.unescape(raw_cv_td)
-
-            # 4. Fallback CV dari Judul / Deskripsi / Teks Halaman jika belum terisi
-            if info["cv"] == "-":
-                desc_match = re.search(r'<meta itemprop="description" content="(.*?)">', page_html, re.DOTALL)
-                desc_text = html.unescape(desc_match.group(1)) if desc_match else ""
-                combined_text = f"{info['title']} {desc_text}"
-
-                cv_patterns = [
-                    r'(?:CV|声優|キャラクターボイス|ボイス|キャスト|CV\.|CV：|CV:)\s*[：:\s【\[（(「『]*([^\n\r,、/】\]）)」』\s]{2,30})',
-                    r'【(?:CV|声優|ボイス)\s*[：:\s]*([^\n\r,、/】\]）)\s]+)】',
-                    r'\((?:CV|声優|ボイス)\s*[：:\s]*([^\n\r,、/】\]）)\s]+)\)',
-                ]
-                valid_cvs = []
-                for pat in cv_patterns:
-                    matches = re.findall(pat, combined_text, re.IGNORECASE)
-                    for m in matches:
-                        clean_m = m.strip()
-                        if 1 < len(clean_m) < 30 and not clean_m.startswith("http") and clean_m not in valid_cvs:
-                            valid_cvs.append(clean_m)
-                if valid_cvs:
-                    info["cv"] = ", ".join(valid_cvs)
-
-            # 5. Ambil Genre / Tag dari Tabel atau Meta Keywords DLsite
-            genre_match = re.search(r'<th>\s*(?:ジャンル|タグ)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
-            if genre_match:
-                g_links = re.findall(r'<a[^>]*>(.*?)</a>', genre_match.group(1), re.DOTALL)
-                clean_genres = [re.sub(r'<[^>]+>', '', g).strip() for g in g_links if re.sub(r'<[^>]+>', '', g).strip()]
-                if clean_genres:
-                    info["genre"] = html.unescape(", ".join(clean_genres))
-                else:
-                    raw_g = re.sub(r'<[^>]+>', '', genre_match.group(1)).strip()
-                    if raw_g:
-                        info["genre"] = html.unescape(", ".join([x.strip() for x in raw_g.splitlines() if x.strip()]))
-
-            # Fallback Genre dari meta keywords
-            if info["genre"] == "-":
-                kw_match = re.search(r'<meta name="keywords" content="(.*?)">', page_html)
-                if kw_match:
-                    raw_kws = [k.strip() for k in html.unescape(kw_match.group(1)).split(",") if k.strip()]
-                    ignore_list = ["DLsite", "同人", "ダウンロード", "R18", "同人誌", "ゲーム", "音声", info.get("circle", "")]
-                    filtered_kws = [k for k in raw_kws if k not in ignore_list and not k.startswith("RJ")]
-                    if filtered_kws:
-                        info["genre"] = ", ".join(filtered_kws[:12])
-
-            # 6. Ambil Rating Usia (年齢指定)
-            age_match = re.search(r'<th>\s*(?:年齢指定|レーティング)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
-            if age_match:
-                clean_age = re.sub(r'<[^>]+>', '', age_match.group(1)).strip()
-                if clean_age:
-                    info["age_rating"] = html.unescape(clean_age)
-            elif "maniax" in url or "r18" in page_html.lower() or "18禁" in page_html:
-                info["age_rating"] = "R18"
-            else:
-                info["age_rating"] = "全年齢"
-
-            if info["title"] and info["title"] != clean_id:
-                break
-        except Exception:
-            continue
-
-    return info
 
 
 class JapaneseASMRApp(tk.Tk):
@@ -2956,7 +2691,6 @@ class JapaneseASMRApp(tk.Tk):
                 # Validasi ketat file output
                 if self.current_process.returncode != 0 or not os.path.exists(final_output) or os.path.getsize(final_output) == 0:
                     raise RuntimeError(f"Gagal memproses file audio final: {os.path.basename(final_output)}")
-                self.current_process.wait()
 
                 if self.stop_requested:
                     break

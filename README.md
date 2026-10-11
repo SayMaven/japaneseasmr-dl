@@ -99,7 +99,8 @@ Jika Anda ingin menjalankan atau mengembangkan langsung dari kode sumber (*sourc
 ```text
 japaneseasmr-dl/
 ├── assets/                # Aset ikon dan grafis (icon.ico, icon.png)
-├── config_manager.py      # Modul manajemen konfigurasi, riwayat, & scraper DLsite
+├── config_manager.py      # Modul manajemen konfigurasi, riwayat unduhan, & probing stream
+├── dlsite_scraper.py      # Modul scraping metadata DLsite resmi & sanitasi nama file
 ├── gui.py                 # Modul antarmuka GUI Desktop, Player, & Settings
 ├── main.py                # Entry-point utama Desktop GUI
 ├── cli.py                 # Entry-point mandiri Terminal CLI

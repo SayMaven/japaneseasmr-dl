@@ -13,10 +13,15 @@ from config_manager import (
     save_config,
     set_download_dir,
 )
+from dlsite_scraper import fetch_dlsite_metadata, sanitize_filename
 
-# Inisialisasi warna terminal ANSI untuk Windows / Linux / macOS
+# Inisialisasi warna terminal ANSI & konfigurasi encoding UTF-8 untuk Windows
 if sys.platform == "win32":
     os.system("")
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    if hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 # Kode Warna ANSI
 RESET = "\033[0m"
@@ -88,8 +93,15 @@ def download_audio(audio_url, output_tmpl):
     subprocess.run(cmd, check=True)
 
 
-def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None):
+def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None, meta=None):
     ffmpeg_bin = get_bin_executable("ffmpeg")
+    meta = meta or {}
+    title_val = meta.get("title") or os.path.splitext(os.path.basename(output_name))[0]
+    artist_val = meta.get("cv") if meta.get("cv") and meta.get("cv") != "-" else "JapaneseASMR"
+    album_val = meta.get("circle") if meta.get("circle") and meta.get("circle") != "-" else "JapaneseASMR"
+    genre_val = meta.get("genre") if meta.get("genre") and meta.get("genre") != "-" else "ASMR"
+    rating_val = meta.get("age_rating") or "-"
+
     if len(track_files) > 1:
         temp_dir = os.path.dirname(track_files[0])
         concat_list_file = os.path.join(temp_dir, "concat_cli_list.txt")
@@ -98,7 +110,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
                 safe_p = os.path.abspath(tf).replace("\\", "/")
                 f_concat.write(f"file '{safe_p}'\n")
 
-        comment_val = f"Tracks: {len(track_files)} Gabungan ({', '.join(track_names)})" if track_names else f"Tracks: {len(track_files)} Gabungan"
+        comment_val = f"Rating: {rating_val} | Tracks: {len(track_files)} Gabungan ({', '.join(track_names)})" if track_names else f"Tracks: {len(track_files)} Gabungan"
         cmd = [
             ffmpeg_bin,
             "-hide_banner",
@@ -117,8 +129,10 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
             "-id3v2_version", "3",
             "-metadata:s:v", "title=Album cover",
             "-metadata:s:v", "comment=Cover (front)",
-            "-metadata", f"title={os.path.splitext(os.path.basename(output_name))[0]}",
-            "-metadata", "artist=JapaneseASMR",
+            "-metadata", f"title={title_val}",
+            "-metadata", f"artist={artist_val}",
+            "-metadata", f"album={album_val}",
+            "-metadata", f"genre={genre_val}",
             "-metadata", f"comment={comment_val}",
             output_name,
         ]
@@ -131,6 +145,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
                 except OSError:
                     pass
     else:
+        comment_val = f"Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}"
         cmd = [
             ffmpeg_bin,
             "-hide_banner",
@@ -146,9 +161,11 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
             "-id3v2_version", "3",
             "-metadata:s:v", "title=Album cover",
             "-metadata:s:v", "comment=Cover (front)",
-            "-metadata", f"title={os.path.splitext(os.path.basename(output_name))[0]}",
-            "-metadata", "artist=JapaneseASMR",
-            "-metadata", f"comment=Circle: JapaneseASMR",
+            "-metadata", f"title={title_val}",
+            "-metadata", f"artist={artist_val}",
+            "-metadata", f"album={album_val}",
+            "-metadata", f"genre={genre_val}",
+            "-metadata", f"comment={comment_val}",
             output_name,
         ]
         subprocess.run(cmd, check=True)
@@ -164,18 +181,36 @@ def cleanup_temp_files(temp_files):
 
 
 def process_single_id(rj_id, current_index, total_count):
+    cfg = load_config()
     download_dir = get_download_dir()
 
-    cover_url = f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg"
-    final_output = os.path.join(download_dir, f"{rj_id}.mp3")
+    # Ambil metadata resmi dari DLsite
+    print(f"\n{CYAN}[*] Mengambil informasi karya dari DLsite...{RESET}")
+    meta = fetch_dlsite_metadata(rj_id)
+    title = meta.get("title", rj_id)
+    cv = meta.get("cv", "-")
+    circle = meta.get("circle", "-")
+    genre = meta.get("genre", "-")
+    age_rating = meta.get("age_rating", "-")
+    cover_url = meta.get("cover_url") or f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg"
+
+    # Penamaan file output sesuai opsi config
+    if cfg.get("use_detailed_filename") and title and title != rj_id:
+        clean_title = sanitize_filename(title)
+        final_output = os.path.join(download_dir, f"[{rj_id}] {clean_title}.mp3")
+    else:
+        final_output = os.path.join(download_dir, f"{rj_id}.mp3")
 
     progress_info = f"[{current_index}/{total_count}] " if total_count > 1 else ""
 
     print(f"\n{MAGENTA}{'-' * 51}{RESET}")
-    print(f"{BOLD}{progress_info}Memproses: {CYAN}{rj_id}{RESET}")
-    print(f" URL Cover     : {cover_url}")
-    print(f" Folder Simpan : {download_dir}")
-    print(f" File Output   : {final_output}")
+    print(f"{BOLD}{progress_info}Memproses      : {CYAN}{rj_id}{RESET}")
+    print(f" Judul Karya    : {GREEN}{title}{RESET}")
+    print(f" CV / Seiyuu    : {YELLOW}{cv}{RESET}")
+    print(f" Circle / Maker : {circle}")
+    print(f" Genre / Rating : {genre} [{age_rating}]")
+    print(f" Folder Simpan  : {download_dir}")
+    print(f" File Output    : {final_output}")
     print(f"{MAGENTA}{'-' * 51}{RESET}\n")
 
     # Cek jika file sudah ada
@@ -235,19 +270,21 @@ def process_single_id(rj_id, current_index, total_count):
                 raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
             downloaded_track_files.append(actual_file)
 
-        # 3. Merge Tracks & Embed Cover Art
+        # 3. Merge Tracks & Embed Cover Art + ID3 Tags
         if len(downloaded_track_files) > 1:
-            print(f"{CYAN}[3/3] Menggabungkan {len(tracks)} track & menyematkan cover art...{RESET}")
+            print(f"{CYAN}[3/3] Menggabungkan {len(tracks)} track & menyematkan cover art + ID3...{RESET}")
         else:
-            print(f"{CYAN}[3/3] Menyematkan cover art ke file MP3...{RESET}")
-        embed_cover_and_merge(downloaded_track_files, temp_cover, final_output, track_names)
+            print(f"{CYAN}[3/3] Menyematkan cover art & ID3 ke file MP3...{RESET}")
+        embed_cover_and_merge(downloaded_track_files, temp_cover, final_output, track_names, meta=meta)
 
         # Simpan ke riwayat unduhan
         add_to_history(
             rjid=rj_id,
-            title=rj_id,
-            cv="-",
-            circle="-",
+            title=title,
+            cv=cv,
+            circle=circle,
+            genre=genre,
+            age_rating=age_rating,
             cover_url=cover_url,
             output_path=final_output,
             temp_cover_path=temp_cover,
@@ -295,4 +332,9 @@ def run_cli():
 
 
 if __name__ == "__main__":
-    run_cli()
+    try:
+        run_cli()
+    except KeyboardInterrupt:
+        print(f"\n\n{YELLOW}[!] Dibatalkan oleh pengguna. Keluar...{RESET}\n")
+        sys.exit(0)
+
