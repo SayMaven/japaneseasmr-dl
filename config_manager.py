@@ -902,10 +902,12 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
 
     if is_m4a:
         remux_args = ["-c:a", "copy", "-movflags", "+faststart", "-f", "ipod"]
-        reencode_args = ["-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-f", "ipod"]
+        reencode_args = ["-c:a", "aac_mf", "-b:a", "256k", "-movflags", "+faststart", "-f", "ipod"]
+        reencode_fallback = ["-c:a", "aac", "-aac_coder", "fast", "-b:a", "256k", "-threads", "0", "-movflags", "+faststart", "-f", "ipod"]
     else:
         remux_args = ["-c:a", "copy", "-id3v2_version", "3"]
-        reencode_args = ["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"]
+        reencode_args = ["-c:a", "libmp3lame", "-b:a", "320k", "-threads", "0", "-id3v2_version", "3"]
+        reencode_fallback = ["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"]
 
     def _exec_ffmpeg(codec_args):
         full_cmd = list(base_cmd) + list(codec_args) + list(meta_tags) + [output_name]
@@ -926,12 +928,18 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
             except subprocess.CalledProcessError as remux_err:
                 if log_func:
                     log_func("[!] Fast Remux gagal karena perbedaan stream, beralih ke re-encoding otomatis...")
-                _exec_ffmpeg(reencode_args)
+                try:
+                    _exec_ffmpeg(reencode_args)
+                except subprocess.CalledProcessError:
+                    _exec_ffmpeg(reencode_fallback)
         else:
             if log_func:
                 target_str = "M4A/AAC" if is_m4a else "MP3"
                 log_func(f"[i] Mengonversi audio ({primary_codec or 'stream'} -> {target_str})...")
-            _exec_ffmpeg(reencode_args)
+            try:
+                _exec_ffmpeg(reencode_args)
+            except subprocess.CalledProcessError:
+                _exec_ffmpeg(reencode_fallback)
     except subprocess.CalledProcessError as e:
         err_msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"FFmpeg muxing gagal: {err_msg}")
