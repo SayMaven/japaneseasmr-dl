@@ -916,18 +916,20 @@ def extract_chapters_from_audio(file_path):
     if not file_path or not os.path.exists(file_path):
         return []
 
+    norm_file = os.path.abspath(file_path)
+
     # 1. Cek CUE sheet pendamping terlebih dahulu
-    cue_path = os.path.splitext(file_path)[0] + ".cue"
+    cue_path = os.path.splitext(norm_file)[0] + ".cue"
     if os.path.exists(cue_path):
         cue_chapters = parse_cue_file(cue_path)
-        if len(cue_chapters) > 1:
+        if len(cue_chapters) >= 1:
             return cue_chapters
 
     # 2. Cek embedded chapters via ffprobe
     ffprobe = get_bin_executable("ffprobe")
     try:
         res = subprocess.run(
-            [ffprobe, "-hide_banner", "-loglevel", "error", "-i", file_path, "-show_chapters"],
+            [ffprobe, "-hide_banner", "-loglevel", "error", "-i", norm_file, "-show_chapters"],
             capture_output=True,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
         )
@@ -939,16 +941,18 @@ def extract_chapters_from_audio(file_path):
             if line == "[CHAPTER]":
                 curr = {"index": len(chapters) + 1, "title": f"Bab {len(chapters) + 1}", "start_ms": 0}
             elif line == "[/CHAPTER]":
-                if curr:
+                if curr and "start_ms" in curr:
                     chapters.append(curr)
                 curr = {}
-            elif line.startswith("start_time="):
+            elif line.lower().startswith("start_time="):
                 try:
-                    curr["start_ms"] = int(float(line.split("=")[1]) * 1000)
+                    curr["start_ms"] = int(float(line.split("=", 1)[1]) * 1000)
                 except Exception:
                     pass
-            elif line.startswith("TAG:title="):
-                curr["title"] = line.split("TAG:title=")[1].strip()
+            elif line.lower().startswith("tag:title="):
+                curr["title"] = line.split("=", 1)[1].strip()
+        if curr and "start_ms" in curr:
+            chapters.append(curr)
         return chapters
     except Exception:
         return []

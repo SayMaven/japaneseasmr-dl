@@ -3045,6 +3045,9 @@ class JapaneseASMRApp(tk.Tk):
                     size_str="Status: Selesai",
                 )
                 self._log(f"[✓] SUKSES: Tersimpan di {os.path.basename(final_output)}")
+                norm_out = os.path.normcase(os.path.abspath(final_output))
+                self._chapters_cache.pop(norm_out, None)
+                self.after(0, self._refresh_playlist_view)
 
             except Exception as e:
                 if self.stop_requested:
@@ -3129,6 +3132,7 @@ class JapaneseASMRApp(tk.Tk):
         Memuat ulang daftar audio yang tersedia di riwayat serta memindai
         seluruh isi folder penyimpanan (termasuk semua subfolder di dalamnya).
         """
+        self._chapters_cache.clear()
         self.player_tree.delete(*self.player_tree.get_children())
         histories = load_history()
         self.playlist_items = []
@@ -3256,9 +3260,7 @@ class JapaneseASMRApp(tk.Tk):
         if 0 <= idx < len(self.playlist_items):
             item = self.playlist_items[idx]
             self._render_player_cover(item.get("rjid", ""), item.get("cover_url", ""))
-            # Preview bab track jika pemutar sedang berhenti
-            if not self.is_playing and not self.is_paused:
-                self._load_track_chapters(item.get("output_path", ""))
+            self._load_track_chapters(item.get("output_path", ""))
 
     def _player_play_selected(self):
         selected = self.player_tree.selection()
@@ -3394,6 +3396,22 @@ class JapaneseASMRApp(tk.Tk):
                     pass
             threading.Thread(target=load_cover, daemon=True).start()
 
+    def _get_current_pos_ms(self):
+        """Mendapatkan posisi playback terkini dalam milidetik (MFPlayer atau MCI)."""
+        if not self.current_playing_file:
+            return 0
+        if self.use_mf_player:
+            return int(self.mf_player.get_position_sec() * 1000)
+        else:
+            _, pos_str = self._mci_send("status asmr_player position")
+            try:
+                mci_pos = int(pos_str)
+            except ValueError:
+                mci_pos = 0
+            ref_len = self.mci_raw_duration_ms if self.mci_raw_duration_ms > 0 else self.player_duration_ms
+            ratio = (mci_pos / float(ref_len)) if ref_len > 0 else 0.0
+            return int(ratio * self.player_duration_ms)
+
     def _load_track_chapters(self, file_path):
         """Memuat daftar bab (CUE sheet atau embedded M4A/MP3) ke dalam Treeview."""
         self.chap_tree.delete(*self.chap_tree.get_children())
@@ -3405,14 +3423,22 @@ class JapaneseASMRApp(tk.Tk):
             self.chap_tree.insert("", "end", iid="none", values=("-", "(Tidak ada audio yang dipilih)"), tags=("normal",))
             return
 
-        if file_path in self._chapters_cache:
-            chapters = self._chapters_cache[file_path]
+        norm_path = os.path.normcase(os.path.abspath(file_path))
+        try:
+            mtime = os.path.getmtime(norm_path)
+        except OSError:
+            mtime = 0
+
+        cached = self._chapters_cache.get(norm_path)
+        if cached and cached[0] == mtime and cached[1]:
+            chapters = cached[1]
         else:
             try:
-                chapters = extract_chapters_from_audio(file_path)
+                chapters = extract_chapters_from_audio(norm_path)
             except Exception:
                 chapters = []
-            self._chapters_cache[file_path] = chapters
+            if chapters:
+                self._chapters_cache[norm_path] = (mtime, chapters)
 
         self.current_chapters = chapters
         if chapters:
@@ -3421,6 +3447,9 @@ class JapaneseASMRApp(tk.Tk):
                 time_str = self._format_time(c.get("start_ms", 0))
                 title_str = c.get("title", f"Bab {idx + 1}")
                 self.chap_tree.insert("", "end", iid=str(idx), values=(time_str, title_str), tags=("normal",))
+            # Sinkronkan posisi bab aktif jika audio yang dimainkan sama dengan track yang dimuat
+            if self.current_playing_file and os.path.normcase(os.path.abspath(self.current_playing_file)) == norm_path:
+                self._sync_active_chapter(self._get_current_pos_ms())
         else:
             self.chap_frame.config(text=" 📑 Daftar Bab / Tracklist (0 Bab) ")
             self.chap_tree.insert("", "end", iid="none", values=("-", "(Tidak ada penanda bab / file cue)"), tags=("normal",))
