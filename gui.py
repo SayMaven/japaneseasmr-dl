@@ -445,10 +445,10 @@ class SettingsDialog(tk.Toplevel):
         sep1 = tk.Frame(self.content_container, bg="#313244", height=1)
         sep1.pack(fill="x", pady=8)
 
-        # Format Penamaan File
+        # Preferensi & Perilaku File
         lbl_name_opt = tk.Label(
             self.content_container,
-            text="Format & Perilaku:",
+            text="Preferensi & Perilaku Unduhan:",
             font=("Segoe UI", 9, "bold"),
             bg="#1e1e2e",
             fg="#cdd6f4",
@@ -458,7 +458,7 @@ class SettingsDialog(tk.Toplevel):
 
         chk_name = tk.Checkbutton(
             self.content_container,
-            text="Gunakan Judul Asli Karya sebagai Nama File Audio (contoh: [RJ01673437] Judul.m4a)",
+            text="Gunakan Judul Asli Karya sebagai Nama File Audio (contoh: [RJ01673437] Judul)",
             variable=self.var_detailed_name,
             font=("Segoe UI", 9),
             bg="#1e1e2e",
@@ -469,34 +469,6 @@ class SettingsDialog(tk.Toplevel):
             anchor="w",
         )
         chk_name.pack(fill="x", pady=4)
-
-        # Informasi Format Audio Otomatis (Smart Native Container)
-        fmt_card = tk.Frame(self.content_container, bg="#282a36", padx=12, pady=10)
-        fmt_card.pack(fill="x", pady=(10, 8))
-
-        lbl_fmt_card_title = tk.Label(
-            fmt_card,
-            text="⚡ Format Audio Otomatis (Smart Native Container)",
-            font=("Segoe UI", 9, "bold"),
-            bg="#282a36",
-            fg="#50fa7b",
-            anchor="w",
-        )
-        lbl_fmt_card_title.pack(fill="x")
-
-        lbl_fmt_card_desc = tk.Label(
-            fmt_card,
-            text="Aplikasi otomatis mendeteksi dan mempertahankan format asli sumber:\n"
-                 "• Sumber MP3 (asmr.one) → Berkas .mp3 (Fast Remux instan < 1 detik)\n"
-                 "• Sumber AAC / m3u8 (JapaneseASMR) → Berkas .m4a (Fast Remux instan < 1 detik)\n"
-                 "Keduanya 100% lossless tanpa re-encoding, serta dilengkapi penanda bab (chapters) & cover art HD lengkap.",
-            font=("Segoe UI", 8),
-            bg="#282a36",
-            fg="#cdd6f4",
-            justify="left",
-            anchor="w",
-        )
-        lbl_fmt_card_desc.pack(fill="x", pady=(4, 0))
 
         chk_notify = tk.Checkbutton(
             self.content_container,

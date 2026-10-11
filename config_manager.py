@@ -930,20 +930,20 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
     try:
         if can_fast_remux:
             if log_func:
-                log_func("[+] Fast Remux aktif: Menyalin stream audio langsung tanpa re-encode (lossless & instan)...")
+                log_func("[+] Mengemas audio sesuai format asli...")
             try:
                 _exec_ffmpeg(remux_args)
             except subprocess.CalledProcessError as remux_err:
                 if log_func:
-                    log_func("[!] Fast Remux gagal karena perbedaan stream, beralih ke re-encoding otomatis...")
+                    log_func("[!] Menyesuaikan format audio...")
                 try:
                     _exec_ffmpeg(reencode_args)
                 except subprocess.CalledProcessError:
                     _exec_ffmpeg(reencode_fallback)
         else:
             if log_func:
-                target_str = "M4A/AAC" if is_m4a else "MP3"
-                log_func(f"[i] Mengonversi audio ({primary_codec or 'stream'} -> {target_str})...")
+                target_str = "M4A" if is_m4a else "MP3"
+                log_func(f"[i] Memproses format audio ({target_str})...")
             try:
                 _exec_ffmpeg(reencode_args)
             except subprocess.CalledProcessError:

@@ -202,7 +202,7 @@ def process_single_id(rj_id, current_index, total_count):
     print(f" Circle / Maker : {circle}")
     print(f" Genre / Rating : {genre} [{age_rating}]")
     print(f" Folder Simpan  : {download_dir}")
-    print(f" Format Mode    : {configured_fmt.upper() if configured_fmt != 'auto' else 'Otomatis (Fast Remux)'}")
+    print(f" Format Mode    : {configured_fmt.upper() if configured_fmt != 'auto' else 'Otomatis'}")
     print(f"{MAGENTA}{'-' * 51}{RESET}\n")
 
     temp_dir = os.path.join(".cache", "temp")
