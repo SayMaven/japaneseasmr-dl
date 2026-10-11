@@ -646,6 +646,43 @@ def get_precise_duration_seconds(file_path):
     return 0.0
 
 
+def get_audio_codec(file_path):
+    """Mendeteksi codec audio dari berkas (misal 'aac', 'mp3', 'flac') via ffprobe."""
+    if not os.path.isfile(file_path):
+        return ""
+    ffprobe_bin = get_bin_executable("ffprobe")
+    cmd = [
+        ffprobe_bin,
+        "-v", "error",
+        "-select_streams", "a:0",
+        "-show_entries", "stream=codec_name",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        file_path,
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            timeout=10,
+        )
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip().lower()
+    except Exception:
+        pass
+    ext = os.path.splitext(file_path)[1].lower()
+    if ext in (".m4a", ".aac"):
+        return "aac"
+    elif ext == ".mp3":
+        return "mp3"
+    elif ext == ".flac":
+        return "flac"
+    elif ext == ".wav":
+        return "pcm"
+    return ""
+
+
 def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_dir=None, log_func=print):
     """
     Membuat file metadata penanda bab FFMPEG (FFMETADATA1) dengan Smart Hybrid Chapter Mapping:
@@ -814,60 +851,87 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
         audio_input_args = ["-i", track_files[0]]
         comment_val = f"Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}"
 
-    # 3. Susun parameter FFmpeg
-    cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-y"]
-    cmd.extend(audio_input_args)
+    # 3. Susun parameter FFmpeg dasar
+    base_cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-y"]
+    base_cmd.extend(audio_input_args)
 
     input_count = 1
     chapter_input_idx = -1
     if meta_chapter_file:
-        cmd.extend(["-f", "ffmetadata", "-i", meta_chapter_file])
+        base_cmd.extend(["-f", "ffmetadata", "-i", meta_chapter_file])
         chapter_input_idx = input_count
         input_count += 1
 
     cover_input_idx = -1
     if cover_path and os.path.isfile(cover_path):
-        cmd.extend(["-i", cover_path])
+        base_cmd.extend(["-i", cover_path])
         cover_input_idx = input_count
         input_count += 1
 
     # Mapping streams
-    cmd.extend(["-map", "0:a"])
+    base_cmd.extend(["-map", "0:a"])
     if cover_input_idx != -1:
-        cmd.extend(["-map", f"{cover_input_idx}:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
+        base_cmd.extend(["-map", f"{cover_input_idx}:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
 
     if chapter_input_idx != -1:
-        cmd.extend(["-map_metadata", str(chapter_input_idx)])
-
-    # Codec & Container Specifics
-    if is_m4a:
-        # Untuk m4a, re-encode ke AAC kualitas prima (256k) agar gapless & chapter mux sempurna
-        cmd.extend(["-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-f", "ipod"])
-    else:
-        # Untuk MP3, gunakan libmp3lame CBR 320k
-        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"])
+        base_cmd.extend(["-map_metadata", str(chapter_input_idx)])
 
     # Metadata tags
+    meta_tags = []
     if cover_input_idx != -1:
-        cmd.extend(["-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
+        meta_tags.extend(["-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
 
-    cmd.extend([
+    meta_tags.extend([
         "-metadata", f"title={title_val}",
         "-metadata", f"artist={artist_val}",
         "-metadata", f"album={album_val}",
         "-metadata", f"genre={genre_val}",
         "-metadata", f"comment={comment_val}",
-        output_name,
     ])
 
-    try:
+    # Analisis Codec Input untuk Smart Fast Remux (Mencegah Re-encode CPU berlebih)
+    input_codecs = [get_audio_codec(tf) for tf in track_files if os.path.exists(tf)]
+    all_same_codec = len(set(input_codecs)) == 1 if input_codecs else False
+    primary_codec = input_codecs[0] if input_codecs else ""
+
+    can_fast_remux = False
+    if is_m4a and all_same_codec and primary_codec == "aac":
+        can_fast_remux = True
+    elif (not is_m4a) and all_same_codec and primary_codec == "mp3":
+        can_fast_remux = True
+
+    if is_m4a:
+        remux_args = ["-c:a", "copy", "-movflags", "+faststart", "-f", "ipod"]
+        reencode_args = ["-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-f", "ipod"]
+    else:
+        remux_args = ["-c:a", "copy", "-id3v2_version", "3"]
+        reencode_args = ["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"]
+
+    def _exec_ffmpeg(codec_args):
+        full_cmd = list(base_cmd) + list(codec_args) + list(meta_tags) + [output_name]
         subprocess.run(
-            cmd,
+            full_cmd,
             capture_output=True,
             text=True,
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             check=True,
         )
+
+    try:
+        if can_fast_remux:
+            if log_func:
+                log_func("[+] Fast Remux aktif: Menyalin stream audio langsung tanpa re-encode (lossless & instan)...")
+            try:
+                _exec_ffmpeg(remux_args)
+            except subprocess.CalledProcessError as remux_err:
+                if log_func:
+                    log_func("[!] Fast Remux gagal karena perbedaan stream, beralih ke re-encoding otomatis...")
+                _exec_ffmpeg(reencode_args)
+        else:
+            if log_func:
+                target_str = "M4A/AAC" if is_m4a else "MP3"
+                log_func(f"[i] Mengonversi audio ({primary_codec or 'stream'} -> {target_str})...")
+            _exec_ffmpeg(reencode_args)
     except subprocess.CalledProcessError as e:
         err_msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"FFmpeg muxing gagal: {err_msg}")

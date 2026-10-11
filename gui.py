@@ -45,7 +45,7 @@ USER_AGENT = (
 
 # Regex Progress Parsing untuk yt-dlp & aria2c
 RE_YTDLP_PROGRESS = re.compile(
-    r'\[download\]\s+([\d\.]+)%\s+of\s+~?\s*([\d\.]+[kMGTP]?i?B)(?:\s+at\s+([\d\.]+[kMGTP]?i?B/s))?(?:\s+ETA\s+([\d:]+))?',
+    r'\[download\]\s+([\d\.]+)%\s+of\s+~?\s*([\d\.]+[kMGTP]?i?B)(?:\s+at\s+([\d\.]+[kMGTP]?i?B/s))?(?:\s+ETA\s+([\d:]+))?(?:\s*\(frag\s+(\d+)/(\d+)\))?',
     re.IGNORECASE,
 )
 RE_ARIA2_PROGRESS = re.compile(
@@ -2768,13 +2768,6 @@ class JapaneseASMRApp(tk.Tk):
                     ffmpeg_bin = get_bin_executable("ffmpeg")
                     ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_bin))
 
-                    possible_files = [
-                        t_final_mp3,
-                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}_.mp3"),
-                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
-                        os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp4"),
-                    ]
-
                     actual_file = None
                     max_track_attempts = 3
                     for attempt_idx in range(1, max_track_attempts + 1):
@@ -2795,16 +2788,15 @@ class JapaneseASMRApp(tk.Tk):
                             "--fragment-retries", "10",
                             "--retry-sleep", "3",
                             "-N", conn_val,
-                            "--downloader", aria2c_bin,
-                            "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+                            "--downloader", f"default:{aria2c_bin}",
+                            "--downloader", "dash,m3u8:native",
+                            "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
                             "--fixup", "never",
                             "--add-header", f"Referer: {t_ref}",
                             "--add-header", f"Origin: {t_ref}",
                             "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
                             "--user-agent", USER_AGENT,
                             t_url,
-                            "-x",
-                            "--audio-format", "mp3",
                             "-o", t_out_tmpl,
                         ]
                         self.current_process = subprocess.Popen(
@@ -2837,9 +2829,12 @@ class JapaneseASMRApp(tk.Tk):
                                     et = m_yt.group(4) or "-"
                                     track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
                                     cur_overall = base_pct + item_step * track_part
+                                    frag_cur = m_yt.group(5)
+                                    frag_tot = m_yt.group(6)
+                                    frag_info = f" (Frag {frag_cur}/{frag_tot})" if frag_cur and frag_tot else ""
                                     self._update_progress(
                                         cur_overall,
-                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
+                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]{frag_info}",
                                         speed=f"Kecepatan: {sp}",
                                         eta=f"Sisa Waktu: {et}",
                                         size_str=f"Total: ~{total_sz}",
@@ -2891,9 +2886,15 @@ class JapaneseASMRApp(tk.Tk):
 
                         self.current_process.wait()
 
-                        # Deteksi file audio yang berhasil dibuat
-                        actual_file = next((f for f in possible_files if os.path.exists(f) and os.path.getsize(f) > 0), None)
+                        # Deteksi file audio yang berhasil dibuat (berbagai format audio asli)
+                        prefix = f"temp_{rjid}_t{t_idx}."
+                        candidates = [
+                            os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
+                            if f.startswith(prefix) and not f.endswith((".part", ".temp", ".ytdl", ".aria2"))
+                        ]
+                        actual_file = next((f for f in candidates if os.path.isfile(f) and os.path.getsize(f) > 0), None)
                         if actual_file:
+                            temp_files.append(actual_file)
                             break
 
                     if self.stop_requested:

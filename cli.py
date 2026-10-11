@@ -121,16 +121,15 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
         "--fragment-retries", "10",
         "--retry-sleep", "3",
         "-N", "16",
-        "--downloader", aria2c_bin,
-        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+        "--downloader", f"default:{aria2c_bin}",
+        "--downloader", "dash,m3u8:native",
+        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
         "--fixup", "never",
         "--add-header", f"Referer: {referer}",
         "--add-header", f"Origin: {referer}",
         "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
         "--user-agent", USER_AGENT,
         audio_url,
-        "-x",
-        "--audio-format", "mp3",
         "-o", output_tmpl,
     ]
 
@@ -242,14 +241,15 @@ def process_single_id(rj_id, current_index, total_count):
             print(f"{CYAN}[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}] (16 koneksi)...{RESET}")
             download_audio(t_url, t_out_tmpl, referer=t_ref)
 
-            # Deteksi file audio yang berhasil dibuat
-            possible_files = [
-                t_final_mp3,
-                os.path.join(temp_dir, f"temp_{rj_id}_t{t_idx}_.mp3"),
-                os.path.join(temp_dir, f"temp_{rj_id}_t{t_idx}.(ext)s.mp3"),
-                os.path.join(temp_dir, f"temp_{rj_id}_t{t_idx}.mp4"),
+            # Deteksi file audio yang berhasil dibuat (berbagai format audio asli)
+            prefix = f"temp_{rj_id}_t{t_idx}."
+            candidates = [
+                os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
+                if f.startswith(prefix) and not f.endswith((".part", ".temp", ".ytdl", ".aria2"))
             ]
-            actual_file = next((f for f in possible_files if os.path.exists(f)), None)
+            actual_file = next((f for f in candidates if os.path.isfile(f) and os.path.getsize(f) > 0), None)
+            if actual_file:
+                temp_files.append(actual_file)
 
             if not actual_file:
                 raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
