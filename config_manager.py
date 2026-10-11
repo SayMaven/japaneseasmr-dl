@@ -809,11 +809,51 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
                     f.write(f"END={ch['end']}\n")
                     safe_title = ch['title'].replace("=", "\\=").replace(";", "\\;").replace("#", "\\#")
                     f.write(f"title={safe_title}\n")
-            return meta_path, len(chapters)
+            return meta_path, len(chapters), chapters
         except Exception:
             pass
 
-    return None, 0
+    return None, 0, []
+
+
+def write_cue_sheet(output_audio_path, chapters, meta=None):
+    """
+    Membuat berkas CUE sheet (.cue) berdampingan dengan berkas audio .mp3
+    agar pemutar audio seperti Foobar2000, AIMP, MusicBee, dan VLC dapat mengenali
+    dan menampilkan daftar bab (track splitting) secara instan.
+    """
+    if not chapters or len(chapters) <= 1:
+        return None
+    cue_path = os.path.splitext(output_audio_path)[0] + ".cue"
+    audio_fname = os.path.basename(output_audio_path)
+    meta = meta or {}
+    artist = meta.get("cv") if meta.get("cv") and meta.get("cv") != "-" else "JapaneseASMR"
+    album = meta.get("title") or os.path.splitext(audio_fname)[0]
+
+    lines = [
+        f'PERFORMER "{artist}"',
+        f'TITLE "{album}"',
+        f'FILE "{audio_fname}" MP3',
+    ]
+    for idx, ch in enumerate(chapters):
+        t_num = idx + 1
+        t_title = ch.get("title") or f"Track {t_num}"
+        safe_title = t_title.replace('"', "'")
+        ms = ch.get("start", 0)
+        tot_sec = ms / 1000.0
+        mm = int(tot_sec // 60)
+        ss = int(tot_sec % 60)
+        ff = int((tot_sec - int(tot_sec)) * 75)
+        lines.append(f"  TRACK {t_num:02d} AUDIO")
+        lines.append(f'    TITLE "{safe_title}"')
+        lines.append(f"    INDEX 01 {mm:02d}:{ss:02d}:{ff:02d}")
+
+    try:
+        with open(cue_path, "w", encoding="utf-8") as f:
+            f.write("\n".join(lines) + "\n")
+        return cue_path
+    except Exception:
+        return None
 
 
 def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None, meta=None, rj_id=None, log_func=print):
@@ -837,13 +877,13 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
     cleanup_list = []
 
     # 1. Hasilkan file Chapter jika memenuhi syarat
-    meta_chapter_file, num_chaps = generate_chapter_metadata(
+    meta_chapter_file, num_chaps, parsed_chapters = generate_chapter_metadata(
         track_files, track_names=track_names, rj_id=clean_rj, temp_dir=temp_dir, log_func=log_func
     )
     if meta_chapter_file:
         cleanup_list.append(meta_chapter_file)
-        if log_func and len(track_files) > 1:
-            log_func(f"[i] Menyiapkan {num_chaps} penanda bab (chapters) ke dalam kontainer {output_name}...")
+        if log_func:
+            log_func(f"[i] Menyematkan {num_chaps} penanda bab (chapters) ke dalam {os.path.basename(output_name)}...")
 
     # 2. Siapkan input audio (Concat list jika multi-track, atau file langsung)
     if len(track_files) > 1:
@@ -930,7 +970,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
     try:
         if can_fast_remux:
             if log_func:
-                log_func("[+] Mengemas audio sesuai format asli...")
+                log_func("[+] Mengemas audio sesuai format asli (Fast Remux instan)...")
             try:
                 _exec_ffmpeg(remux_args)
             except subprocess.CalledProcessError as remux_err:
@@ -948,6 +988,12 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
                 _exec_ffmpeg(reencode_args)
             except subprocess.CalledProcessError:
                 _exec_ffmpeg(reencode_fallback)
+
+        # Buat berkas CUE Sheet pendamping jika format MP3 agar bab terbaca di Foobar2000
+        if not is_m4a and parsed_chapters:
+            cue_res = write_cue_sheet(output_name, parsed_chapters, meta=meta)
+            if cue_res and log_func:
+                log_func(f"[✓] CUE Sheet dibuat untuk pemutar audio (Foobar2000): {os.path.basename(cue_res)}")
     except subprocess.CalledProcessError as e:
         err_msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"FFmpeg muxing gagal: {err_msg}")
