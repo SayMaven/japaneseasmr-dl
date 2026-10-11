@@ -1,6 +1,7 @@
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 from PIL import Image
@@ -63,6 +64,7 @@ DEFAULT_CONFIG = {
     "notify_popup": True,
     "auto_clipboard": False,
     "ytdlp_channel": "stable",
+    "audio_format": "m4a",
 }
 
 
@@ -86,14 +88,19 @@ def get_ytdlp_version():
 
 
 def update_ytdlp_engine(channel="stable"):
-    """Memperbarui binary yt-dlp ke rilis stable atau nightly."""
+    """
+    Memperbarui binary yt-dlp ke rilis stable atau nightly (@latest).
+    Mengembalikan: (success: bool, status_code: str, display_message: str)
+    status_code: 'already_latest' | 'updated' | 'error'
+    """
     import subprocess
     target_channel = channel.strip().lower()
     if target_channel not in ["stable", "nightly"]:
         target_channel = "stable"
 
     ytdlp_bin = get_bin_executable("yt-dlp")
-    cmd = [ytdlp_bin, "--update-to", target_channel]
+    # Gunakan @latest agar yt-dlp bersedia beralih/downgrade antar-saluran (misal dari nightly ke stable)
+    cmd = [ytdlp_bin, "--update-to", f"{target_channel}@latest"]
     try:
         res = subprocess.run(
             cmd,
@@ -102,11 +109,24 @@ def update_ytdlp_engine(channel="stable"):
             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
             timeout=120,
         )
-        out_msg = (res.stdout or "") + ("\n" + res.stderr if res.stderr else "")
-        success = res.returncode == 0 or "up to date" in out_msg.lower() or "updated" in out_msg.lower()
-        return success, out_msg.strip()
+        raw_out = (res.stdout or "").strip()
+        raw_err = (res.stderr or "").strip()
+        combined = f"{raw_out}\n{raw_err}".lower()
+
+        cur_ver = get_ytdlp_version()
+
+        if res.returncode != 0:
+            err_msg = raw_err or raw_out or f"Proses update gagal (exit code: {res.returncode})."
+            return False, "error", f"Gagal memperbarui yt-dlp: {err_msg}"
+
+        if "is up to date" in combined:
+            clean_msg = f"yt-dlp sudah menggunakan versi terbaru ({cur_ver}) pada channel {target_channel.title()}."
+            return True, "already_latest", clean_msg
+        else:
+            clean_msg = f"Berhasil memperbarui yt-dlp ke versi {cur_ver} (Channel: {target_channel.title()})."
+            return True, "updated", clean_msg
     except Exception as e:
-        return False, str(e)
+        return False, "error", f"Gagal menjalankan pembaruan: {e}"
 
 
 def get_dir_size_str(dir_path):
@@ -218,6 +238,21 @@ def set_download_dir(new_dir):
     cfg["download_dir"] = new_dir
     save_config(cfg)
     os.makedirs(new_dir, exist_ok=True)
+
+
+def get_audio_format():
+    """Mengambil format audio output dari config ('m4a' atau 'mp3'). Default: 'm4a'."""
+    cfg = load_config()
+    fmt = str(cfg.get("audio_format", "m4a")).strip().lower()
+    return "m4a" if fmt in ("m4a", "aac") else "mp3"
+
+
+def set_audio_format(fmt):
+    """Menyimpan pilihan format audio ('m4a' atau 'mp3') ke config.json."""
+    clean_fmt = "m4a" if str(fmt).strip().lower() in ("m4a", "aac") else "mp3"
+    cfg = load_config()
+    cfg["audio_format"] = clean_fmt
+    save_config(cfg)
 
 
 def load_history():
@@ -346,6 +381,23 @@ def filter_smart_asmrone_tracks(tree):
     import re
     AUDIO_EXTS = ('.mp3', '.wav', '.m4a', '.flac', '.aac', '.ogg')
 
+    def extract_audios_from_node(node):
+        audios = []
+        if node.get("type") == "audio" and (node.get("mediaStreamUrl") or node.get("mediaDownloadUrl")):
+            t = node.get("title", "")
+            if any(t.lower().endswith(ext) for ext in AUDIO_EXTS):
+                audios.append({
+                    "name": re.sub(r'\.[a-zA-Z0-9]+$', '', t),
+                    "url": node.get("mediaDownloadUrl") or node.get("mediaStreamUrl"),
+                    "title": t,
+                    "referer": "https://asmr.one/",
+                    "source": "asmr.one",
+                    "duration": float(node.get("duration") or 0.0),
+                })
+        for c in node.get("children", []):
+            audios.extend(extract_audios_from_node(c))
+        return audios
+
     # 1. Kumpulkan semua audio yang ada di level root
     root_audios = []
     for item in tree:
@@ -358,11 +410,24 @@ def filter_smart_asmrone_tracks(tree):
                     "title": title,
                     "referer": "https://asmr.one/",
                     "source": "asmr.one",
+                    "duration": float(item.get("duration") or 0.0),
                 })
 
     # Cek apakah root_audios memiliki pola nomor urut cerita (01, 02, ...)
     numbered_root = [a for a in root_audios if re.match(r'^\s*0?\d+', a["title"])]
     if len(numbered_root) >= 2 or (len(root_audios) > 0 and len(numbered_root) == len(root_audios)):
+        # Jika root_audios seluruhnya adalah WAV/lossless berukuran gigantis, cek apakah ada folder MP3 resmi untuk 本編
+        if all(a["title"].lower().endswith((".wav", ".flac")) for a in numbered_root):
+            for item in tree:
+                if item.get("type") == "folder":
+                    f_title = item.get("title", "")
+                    if "本編" in f_title and "mp3" in f_title.lower():
+                        c_audios = extract_audios_from_node(item)
+                        mp3_only = [c for c in c_audios if c["title"].lower().endswith(".mp3")]
+                        if len(mp3_only) >= 2:
+                            mp3_only.sort(key=lambda x: _natural_sort_key(x["title"]))
+                            return mp3_only
+
         numbered_root.sort(key=lambda x: _natural_sort_key(x["title"]))
         return numbered_root
 
@@ -374,7 +439,11 @@ def filter_smart_asmrone_tracks(tree):
         ft_lower = f_title.lower()
         if "本編" in f_title or "main" in ft_lower or "track" in ft_lower:
             score += 100
-        penalties = ["se無し", "se無", "音声原本", "原本", "システムボイス", "システム音", "効果音", "bgm", "昭和音質", "木枯らし", "雨降り", "se強化"]
+        if "おすすめ" in f_title or "お勧め" in f_title or "se有" in f_title or "seあり" in ft_lower:
+            score += 50
+        if "mp3" in ft_lower:
+            score += 30
+        penalties = ["se無し", "se無", "seなし", "nose", "音声原本", "原本", "システムボイス", "システム音", "効果音", "bgm", "昭和音質", "木枯らし", "雨降り", "se強化"]
         if any(neg in ft_lower for neg in penalties):
             score -= 80
         if "おまけ" in f_title and "本編" not in f_title:
@@ -383,40 +452,28 @@ def filter_smart_asmrone_tracks(tree):
 
     folders.sort(key=lambda f: folder_score(f.get("title", "")), reverse=True)
 
-    def extract_audios_from_node(node):
-        audios = []
-        if node.get("type") == "audio" and (node.get("mediaStreamUrl") or node.get("mediaDownloadUrl")):
-            t = node.get("title", "")
-            if any(t.lower().endswith(ext) for ext in AUDIO_EXTS):
-                audios.append({
-                    "name": re.sub(r'\.[a-zA-Z0-9]+$', '', t),
-                    "url": node.get("mediaDownloadUrl") or node.get("mediaStreamUrl"),
-                    "title": t,
-                    "referer": "https://asmr.one/",
-                    "source": "asmr.one",
-                })
-        for c in node.get("children", []):
-            audios.extend(extract_audios_from_node(c))
-        return audios
-
     for best_f in folders:
-        sub_children = best_f.get("children", [])
-        mp3_folder = next((c for c in sub_children if c.get("type") == "folder" and "mp3" in c.get("title", "").lower()), None)
-        wav_folder = next((c for c in sub_children if c.get("type") == "folder" and "wav" in c.get("title", "").lower()), None)
+        target_node = best_f
+        while True:
+            sub_children = [c for c in target_node.get("children", []) if c.get("type") == "folder"]
+            if not sub_children:
+                break
+            sub_children.sort(key=lambda c: folder_score(c.get("title", "")), reverse=True)
+            target_node = sub_children[0]
 
-        target_node = mp3_folder if mp3_folder else (wav_folder if wav_folder else best_f)
         tracks = extract_audios_from_node(target_node)
         if tracks:
             seen_bases = {}
             filtered = []
             for tr in tracks:
-                base = tr["name"].lower()
-                if base not in seen_bases:
-                    seen_bases[base] = tr
+                raw_b = tr["name"].lower()
+                clean_b = re.sub(r'_(?:se|nose)$', '', raw_b)
+                if clean_b not in seen_bases:
+                    seen_bases[clean_b] = tr
                     filtered.append(tr)
-                elif tr["title"].lower().endswith(".mp3") and seen_bases[base]["title"].lower().endswith(".wav"):
-                    filtered.remove(seen_bases[base])
-                    seen_bases[base] = tr
+                elif tr["title"].lower().endswith(".mp3") and seen_bases[clean_b]["title"].lower().endswith(".wav"):
+                    filtered.remove(seen_bases[clean_b])
+                    seen_bases[clean_b] = tr
                     filtered.append(tr)
 
             filtered.sort(key=lambda x: _natural_sort_key(x["title"]))
@@ -539,3 +596,286 @@ def resolve_audio_url(rj_id, referer="https://japaneseasmr.com", user_agent="Moz
     """Mendeteksi single URL audio pertama."""
     tracks = discover_all_audio_tracks(rj_id, referer, user_agent)
     return tracks[0]["url"] if tracks else f"https://v.weeab0o.xyz/{rj_id}.mp3"
+
+
+def get_precise_duration_seconds(file_path):
+    """Mendapatkan durasi presisi berkas audio (dalam detik float) via ffprobe atau ffmpeg."""
+    if not os.path.isfile(file_path):
+        return 0.0
+    import re
+    ffprobe_bin = get_bin_executable("ffprobe")
+    cmd = [
+        ffprobe_bin,
+        "-v", "error",
+        "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1",
+        file_path,
+    ]
+    try:
+        res = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            timeout=12,
+        )
+        val = float(res.stdout.strip())
+        if val > 0:
+            return val
+    except Exception:
+        pass
+
+    # Fallback ke ffmpeg -i
+    try:
+        ffmpeg_bin = get_bin_executable("ffmpeg")
+        cmd = [ffmpeg_bin, "-hide_banner", "-i", file_path]
+        res = subprocess.run(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            timeout=12,
+        )
+        txt = res.stderr.decode("utf-8", errors="ignore")
+        m = re.search(r'Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)', txt)
+        if m:
+            h, mi, s = int(m.group(1)), int(m.group(2)), float(m.group(3))
+            return h * 3600 + mi * 60 + s
+    except Exception:
+        pass
+    return 0.0
+
+
+def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_dir=None, log_func=print):
+    """
+    Membuat file metadata penanda bab FFMPEG (FFMETADATA1) dengan Smart Hybrid Chapter Mapping:
+    - Kasus A (JapaneseASMR Master + Omake):
+      Jika durasi track fisik pertama (track_files[0]) cocok dengan total durasi bab asmr.one (+- 2.5s),
+      pecah track_files[0] menjadi bab-bab cerita dari asmr.one, lalu sambung track_files[1:] (omake/bonus) sebagai bab berikutnya.
+    - Kasus B (Multi-track 1-to-1):
+      Jika jumlah track fisik sama dengan jumlah track asmr.one dan total durasi cocok (+- 2.5s),
+      sinkronkan nama bab dengan judul dari asmr.one.
+    - Kasus C (Multi-track fisik murni):
+      Jika > 1 file fisik dan tidak cocok dengan asmr.one, buat bab berdasarkan file fisik masing-masing.
+    Mengembalikan: (path ke ffmetadata.txt, jumlah_bab) jika valid, atau (None, 0).
+    """
+    import re
+    if not temp_dir:
+        temp_dir = os.path.dirname(track_files[0]) if track_files else os.path.join(".cache", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    meta_path = os.path.join(temp_dir, f"chapters_{rj_id or 'audio'}_{int(time.time()*1000)}.txt")
+
+    chapters = []
+    hybrid_matched = False
+
+    if rj_id and track_files:
+        num_id = re.sub(r'^[A-Za-z]+', '', rj_id.strip())
+        if num_id:
+            try:
+                tree = fetch_asmrone_tree(num_id)
+                if tree:
+                    cand_tracks = filter_smart_asmrone_tracks(tree)
+                    if cand_tracks and len(cand_tracks) > 1:
+                        sum_asmr_sec = sum(float(t.get("duration") or 0.0) for t in cand_tracks)
+                        t0_dur = get_precise_duration_seconds(track_files[0])
+
+                        # KASUS A: Track 1 adalah audio kompilasi utama yang cocok dengan total bab asmr.one (+- 2.5s)
+                        if t0_dur > 10 and abs(t0_dur - sum_asmr_sec) <= 2.5:
+                            curr_ms = 0
+                            for t in cand_tracks:
+                                dur_ms = int(float(t.get("duration") or 0.0) * 1000)
+                                raw_name = t.get("name") or t.get("title") or "Track"
+                                clean_name = re.sub(r'\.(?:mp3|wav|m4a|flac|aac|ogg)$', '', raw_name, flags=re.I).strip()
+                                clean_name = re.sub(r'_(?:SE|NoSE)$', '', clean_name, flags=re.I).strip()
+                                chapters.append({
+                                    "start": curr_ms,
+                                    "end": curr_ms + dur_ms,
+                                    "title": clean_name or "Track"
+                                })
+                                curr_ms += dur_ms
+
+                            # Jika ada file fisik tambahan di disk (seperti Omake, Bonus, EX di track_files[1:])
+                            if len(track_files) > 1:
+                                for idx, tf in enumerate(track_files[1:], start=1):
+                                    dur_sec = get_precise_duration_seconds(tf)
+                                    dur_ms = int(dur_sec * 1000)
+                                    t_title = track_names[idx] if (track_names and idx < len(track_names)) else f"Omake {idx}"
+                                    clean_title = re.sub(r'\.(?:mp3|wav|m4a|flac|aac|ogg)$', '', t_title, flags=re.I).strip()
+                                    chapters.append({
+                                        "start": curr_ms,
+                                        "end": curr_ms + dur_ms,
+                                        "title": clean_title or f"Omake {idx}"
+                                    })
+                                    curr_ms += dur_ms
+
+                            hybrid_matched = True
+                            if log_func:
+                                omake_count = len(track_files) - 1
+                                extra_str = f" + {omake_count} omake" if omake_count > 0 else ""
+                                log_func(f"[✓] Hybrid Chapter: Track utama ({t0_dur:.1f}s) berhasil dipetakan menjadi {len(cand_tracks)} bab cerita{extra_str}!")
+
+                        # KASUS B: Total durasi seluruh file fisik cocok dengan total asmr.one dan jumlah track sama
+                        elif len(track_files) == len(cand_tracks):
+                            tot_phys_sec = sum(get_precise_duration_seconds(tf) for tf in track_files)
+                            if abs(tot_phys_sec - sum_asmr_sec) <= 2.5:
+                                curr_ms = 0
+                                for idx, tf in enumerate(track_files):
+                                    dur_sec = get_precise_duration_seconds(tf)
+                                    dur_ms = int(dur_sec * 1000)
+                                    cand_name = cand_tracks[idx].get("name") or cand_tracks[idx].get("title")
+                                    t_title = cand_name or (track_names[idx] if track_names and idx < len(track_names) else f"Track {idx+1}")
+                                    clean_title = re.sub(r'\.(?:mp3|wav|m4a|flac|aac|ogg)$', '', t_title, flags=re.I).strip()
+                                    clean_title = re.sub(r'_(?:SE|NoSE)$', '', clean_title, flags=re.I).strip()
+                                    chapters.append({
+                                        "start": curr_ms,
+                                        "end": curr_ms + dur_ms,
+                                        "title": clean_title or f"Track {idx+1}"
+                                    })
+                                    curr_ms += dur_ms
+                                hybrid_matched = True
+                                if log_func:
+                                    log_func(f"[✓] Terverifikasi: {len(chapters)} track fisik disinkronkan dengan metadata asmr.one!")
+            except Exception:
+                pass
+
+    # KASUS C: Fallback Multi-track fisik murni (jika tidak cocok dengan asmr.one)
+    if not hybrid_matched and len(track_files) > 1:
+        curr_ms = 0
+        for idx, tf in enumerate(track_files):
+            dur_sec = get_precise_duration_seconds(tf)
+            dur_ms = int(dur_sec * 1000)
+            t_title = track_names[idx] if (track_names and idx < len(track_names)) else f"Track {idx + 1}"
+            clean_title = re.sub(r'\.(?:mp3|wav|m4a|flac|aac|ogg)$', '', t_title, flags=re.I).strip()
+            chapters.append({
+                "start": curr_ms,
+                "end": curr_ms + dur_ms,
+                "title": clean_title or f"Track {idx + 1}"
+            })
+            curr_ms += dur_ms
+
+    if chapters and len(chapters) > 1:
+        try:
+            with open(meta_path, "w", encoding="utf-8") as f:
+                f.write(";FFMETADATA1\n")
+                for ch in chapters:
+                    f.write("[CHAPTER]\n")
+                    f.write("TIMEBASE=1/1000\n")
+                    f.write(f"START={ch['start']}\n")
+                    f.write(f"END={ch['end']}\n")
+                    safe_title = ch['title'].replace("=", "\\=").replace(";", "\\;").replace("#", "\\#")
+                    f.write(f"title={safe_title}\n")
+            return meta_path, len(chapters)
+        except Exception:
+            pass
+
+    return None, 0
+
+
+def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None, meta=None, rj_id=None, log_func=print):
+    """
+    Menggabungkan multi-track (jika ada), menyematkan cover art HD, metadata lengkap,
+    serta menanamkan penanda bab (chapters) secara otomatis.
+    Mendukung output berkas .m4a (dengan Apple/Nero chapter tracks) dan .mp3.
+    """
+    ffmpeg_bin = get_bin_executable("ffmpeg")
+    meta = meta or {}
+    clean_rj = rj_id or meta.get("rjid", "")
+    title_val = meta.get("title") or os.path.splitext(os.path.basename(output_name))[0]
+    artist_val = meta.get("cv") if meta.get("cv") and meta.get("cv") != "-" else "JapaneseASMR"
+    album_val = meta.get("circle") if meta.get("circle") and meta.get("circle") != "-" else (clean_rj or "JapaneseASMR")
+    genre_val = meta.get("genre") if meta.get("genre") and meta.get("genre") != "-" else "ASMR"
+    rating_val = meta.get("age_rating") or "-"
+
+    is_m4a = output_name.lower().endswith(".m4a")
+    temp_dir = os.path.dirname(track_files[0]) if track_files else os.path.join(".cache", "temp")
+    os.makedirs(temp_dir, exist_ok=True)
+    cleanup_list = []
+
+    # 1. Hasilkan file Chapter jika memenuhi syarat
+    meta_chapter_file, num_chaps = generate_chapter_metadata(
+        track_files, track_names=track_names, rj_id=clean_rj, temp_dir=temp_dir, log_func=log_func
+    )
+    if meta_chapter_file:
+        cleanup_list.append(meta_chapter_file)
+        if log_func and len(track_files) > 1:
+            log_func(f"[i] Menyiapkan {num_chaps} penanda bab (chapters) ke dalam kontainer {output_name}...")
+
+    # 2. Siapkan input audio (Concat list jika multi-track, atau file langsung)
+    if len(track_files) > 1:
+        concat_list_file = os.path.join(temp_dir, f"concat_{clean_rj or 'merge'}_{int(time.time()*1000)}.txt")
+        cleanup_list.append(concat_list_file)
+        with open(concat_list_file, "w", encoding="utf-8") as f_concat:
+            for tf in track_files:
+                safe_p = os.path.abspath(tf).replace("\\", "/")
+                f_concat.write(f"file '{safe_p}'\n")
+        audio_input_args = ["-f", "concat", "-safe", "0", "-i", concat_list_file]
+        comment_val = f"Rating: {rating_val} | Tracks: {len(track_files)} Gabungan ({', '.join(track_names or [])})"
+    else:
+        audio_input_args = ["-i", track_files[0]]
+        comment_val = f"Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}"
+
+    # 3. Susun parameter FFmpeg
+    cmd = [ffmpeg_bin, "-hide_banner", "-loglevel", "error", "-y"]
+    cmd.extend(audio_input_args)
+
+    input_count = 1
+    chapter_input_idx = -1
+    if meta_chapter_file:
+        cmd.extend(["-f", "ffmetadata", "-i", meta_chapter_file])
+        chapter_input_idx = input_count
+        input_count += 1
+
+    cover_input_idx = -1
+    if cover_path and os.path.isfile(cover_path):
+        cmd.extend(["-i", cover_path])
+        cover_input_idx = input_count
+        input_count += 1
+
+    # Mapping streams
+    cmd.extend(["-map", "0:a"])
+    if cover_input_idx != -1:
+        cmd.extend(["-map", f"{cover_input_idx}:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
+
+    if chapter_input_idx != -1:
+        cmd.extend(["-map_metadata", str(chapter_input_idx)])
+
+    # Codec & Container Specifics
+    if is_m4a:
+        # Untuk m4a, re-encode ke AAC kualitas prima (256k) agar gapless & chapter mux sempurna
+        cmd.extend(["-c:a", "aac", "-b:a", "256k", "-movflags", "+faststart", "-f", "ipod"])
+    else:
+        # Untuk MP3, gunakan libmp3lame CBR 320k
+        cmd.extend(["-c:a", "libmp3lame", "-b:a", "320k", "-id3v2_version", "3"])
+
+    # Metadata tags
+    if cover_input_idx != -1:
+        cmd.extend(["-metadata:s:v", "title=Album cover", "-metadata:s:v", "comment=Cover (front)"])
+
+    cmd.extend([
+        "-metadata", f"title={title_val}",
+        "-metadata", f"artist={artist_val}",
+        "-metadata", f"album={album_val}",
+        "-metadata", f"genre={genre_val}",
+        "-metadata", f"comment={comment_val}",
+        output_name,
+    ])
+
+    try:
+        subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+            check=True,
+        )
+    except subprocess.CalledProcessError as e:
+        err_msg = e.stderr.strip() if e.stderr else str(e)
+        raise RuntimeError(f"FFmpeg muxing gagal: {err_msg}")
+    finally:
+        for cl_file in cleanup_list:
+            if os.path.exists(cl_file):
+                try:
+                    os.remove(cl_file)
+                except OSError:
+                    pass
+

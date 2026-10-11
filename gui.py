@@ -6,6 +6,7 @@ import re
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 import urllib.request
@@ -19,14 +20,18 @@ from config_manager import (
     clear_cover_cache,
     clear_temp_cache,
     discover_all_audio_tracks,
+    embed_cover_and_merge,
+    get_audio_format,
     get_bin_executable,
     get_cache_size_info,
     get_download_dir,
+    get_precise_duration_seconds,
     get_ytdlp_version,
     load_config,
     load_history,
     resolve_audio_url,
     save_config,
+    set_audio_format,
     set_download_dir,
     update_ytdlp_engine,
 )
@@ -249,6 +254,7 @@ class SettingsDialog(tk.Toplevel):
         self.var_auto_clipboard = tk.BooleanVar(value=self.cfg.get("auto_clipboard", False))
         self.var_connections = tk.IntVar(value=self.cfg.get("connections", 16))
         self.var_ytdlp_channel = tk.StringVar(value=self.cfg.get("ytdlp_channel", "stable"))
+        self.var_audio_format = tk.StringVar(value=self.cfg.get("audio_format", get_audio_format()))
 
         self.nav_buttons = {}
         self.current_tab = "general"
@@ -451,7 +457,7 @@ class SettingsDialog(tk.Toplevel):
 
         chk_name = tk.Checkbutton(
             self.content_container,
-            text="Gunakan Judul Asli Karya sebagai Nama File MP3 (contoh: [RJ01673437] Judul.mp3)",
+            text="Gunakan Judul Asli Karya sebagai Nama File Audio (contoh: [RJ01673437] Judul.m4a)",
             variable=self.var_detailed_name,
             font=("Segoe UI", 9),
             bg="#1e1e2e",
@@ -462,6 +468,50 @@ class SettingsDialog(tk.Toplevel):
             anchor="w",
         )
         chk_name.pack(fill="x", pady=4)
+
+        # Pilihan Format Audio Output (M4A vs MP3)
+        lbl_fmt_opt = tk.Label(
+            self.content_container,
+            text="Format Berkas Audio Output:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_fmt_opt.pack(fill="x", pady=(8, 2))
+
+        fmt_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        fmt_box.pack(fill="x", pady=(0, 6))
+
+        r_m4a = tk.Radiobutton(
+            fmt_box,
+            text="M4A (AAC) - Rekomendasi (Mendukung Penanda Bab / Multi-Track Foobar2000)",
+            variable=self.var_audio_format,
+            value="m4a",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            anchor="w",
+        )
+        r_m4a.pack(fill="x", pady=1)
+
+        r_mp3 = tk.Radiobutton(
+            fmt_box,
+            text="MP3 (LAME CBR 320k) - Format Klasik Kompatibilitas Universal",
+            variable=self.var_audio_format,
+            value="mp3",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#f8f8f2",
+            anchor="w",
+        )
+        r_mp3.pack(fill="x", pady=1)
 
         chk_notify = tk.Checkbutton(
             self.content_container,
@@ -574,8 +624,11 @@ class SettingsDialog(tk.Toplevel):
         def _async_load_ver():
             ver = get_ytdlp_version()
             self._cached_ytdlp_ver = ver
+            chan_tag = "Nightly" if ver.count(".") >= 3 else "Stable"
             if self.winfo_exists() and hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-                self.after(0, lambda: self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {ver}"))
+                self.after(0, lambda: self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {ver} ({chan_tag})"))
+                if not self.cfg.get("ytdlp_channel"):
+                    self.var_ytdlp_channel.set(chan_tag.lower())
 
         threading.Thread(target=_async_load_ver, daemon=True).start()
 
@@ -652,22 +705,35 @@ class SettingsDialog(tk.Toplevel):
         """Menjalankan proses update yt-dlp di background thread."""
         channel = self.var_ytdlp_channel.get()
         self.btn_update_ytdlp.config(state="disabled")
-        self.lbl_ytdlp_status.config(text=f"Sedang memperbarui yt-dlp ({channel})...", fg="#bd93f9")
+        self.lbl_ytdlp_status.config(text=f"Sedang memeriksa/memperbarui ({channel.title()})...", fg="#bd93f9")
 
         def run_upd():
-            success, msg = update_ytdlp_engine(channel=channel)
+            success, status_code, msg = update_ytdlp_engine(channel=channel)
             new_ver = get_ytdlp_version()
+            chan_tag = "Nightly" if new_ver.count(".") >= 3 else "Stable"
 
             def done():
                 self.btn_update_ytdlp.config(state="normal")
-                self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {new_ver}")
+                self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {new_ver} ({chan_tag})")
                 if success:
-                    self.lbl_ytdlp_status.config(text=f"Sukses! Versi {new_ver}", fg="#50fa7b")
-                    show_dark_info(
-                        self,
-                        "Pembaruan yt-dlp Selesai",
-                        f"Proses pembaruan yt-dlp (Channel: {channel}) telah selesai.\n\nVersi saat ini: {new_ver}\n\nLog output:\n{msg}",
-                    )
+                    # Simpan preferensi channel yang aktif ke config
+                    self.cfg["ytdlp_channel"] = channel
+                    save_config(self.cfg)
+
+                    if status_code == "already_latest":
+                        self.lbl_ytdlp_status.config(text=f"Sudah versi terbaru ({new_ver})", fg="#8be9fd")
+                        show_dark_info(
+                            self,
+                            "Sudah Versi Terbaru",
+                            f"yt-dlp sudah menggunakan versi terbaru ({new_ver}) pada channel {channel.title()}.\n\nTidak ada pembaruan baru yang diperlukan.",
+                        )
+                    else:
+                        self.lbl_ytdlp_status.config(text=f"Sukses! Versi {new_ver}", fg="#50fa7b")
+                        show_dark_info(
+                            self,
+                            "Pembaruan Selesai",
+                            f"Berhasil memperbarui yt-dlp ke versi {new_ver} (Channel: {channel.title()}).",
+                        )
                 else:
                     self.lbl_ytdlp_status.config(text="Gagal memperbarui", fg="#ff5555")
                     show_dark_error(
@@ -908,9 +974,11 @@ class SettingsDialog(tk.Toplevel):
         self.cfg["auto_clipboard"] = self.var_auto_clipboard.get()
         self.cfg["connections"] = max(1, min(32, self.var_connections.get()))
         self.cfg["ytdlp_channel"] = self.var_ytdlp_channel.get()
+        self.cfg["audio_format"] = self.var_audio_format.get()
 
         save_config(self.cfg)
         set_download_dir(new_dir)
+        set_audio_format(self.var_audio_format.get())
 
         # Sinkronisasi ke GUI utama
         self.parent.opt_detailed_name.set(self.cfg["use_detailed_filename"])
@@ -925,6 +993,135 @@ class SettingsDialog(tk.Toplevel):
         if hasattr(self, "parent") and self.parent:
             self.parent._settings_dialog = None
         self.destroy()
+
+
+# ==================== NATIVE MEDIA FOUNDATION AUDIO ENGINE ====================
+class PROPVARIANT(ctypes.Structure):
+    _fields_ = [
+        ("vt", ctypes.c_ushort),
+        ("wReserved1", ctypes.c_ushort),
+        ("wReserved2", ctypes.c_ushort),
+        ("wReserved3", ctypes.c_ushort),
+        ("hVal", ctypes.c_int64),
+    ]
+
+class GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.c_ulong),
+        ("Data2", ctypes.c_ushort),
+        ("Data3", ctypes.c_ushort),
+        ("Data4", ctypes.c_byte * 8)
+    ]
+
+GUID_NULL = GUID(0, 0, 0, (ctypes.c_byte * 8)())
+
+class NativeMFPlayer:
+    """Pemutar audio berbasis Windows Media Foundation (MFPlay) untuk pemutaran native M4A, AAC, MP3, WAV."""
+    def __init__(self):
+        self.player_ptr = ctypes.c_void_p()
+        self.is_playing = False
+        self.is_paused = False
+        self.play_start_time = 0.0
+        self.seek_offset_sec = 0.0
+
+    def is_available(self):
+        return sys.platform == "win32" and hasattr(ctypes.windll, "mfplay")
+
+    def load(self, file_path):
+        self.close()
+        if not self.is_available() or not os.path.isfile(file_path):
+            return False
+        try:
+            from ctypes import wintypes
+            mfplay = ctypes.windll.mfplay
+            MFPCreateMediaPlayer = mfplay.MFPCreateMediaPlayer
+            MFPCreateMediaPlayer.argtypes = [
+                wintypes.LPCWSTR, wintypes.BOOL, wintypes.UINT,
+                ctypes.c_void_p, wintypes.HWND, ctypes.POINTER(ctypes.c_void_p)
+            ]
+            MFPCreateMediaPlayer.restype = ctypes.c_long
+
+            ptr = ctypes.c_void_p()
+            hr = MFPCreateMediaPlayer(os.path.abspath(file_path), False, 0, None, None, ctypes.byref(ptr))
+            if hr != 0 or not ptr.value:
+                return False
+
+            self.player_ptr = ptr
+            vtable = ctypes.cast(ptr.value, ctypes.POINTER(ctypes.POINTER(ctypes.c_void_p))).contents
+            self.PlayFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[3])
+            self.PauseFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[4])
+            self.StopFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[5])
+            self.SetPosFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(PROPVARIANT))(vtable[7])
+            self.SetVolFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_float)(vtable[10])
+            self.RelFunc = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
+            self.seek_offset_sec = 0.0
+            return True
+        except Exception:
+            return False
+
+    def play(self):
+        if self.player_ptr.value:
+            try:
+                self.PlayFunc(self.player_ptr)
+                self.play_start_time = time.time()
+                self.is_playing = True
+                self.is_paused = False
+            except Exception:
+                pass
+
+    def pause(self):
+        if self.player_ptr.value and self.is_playing:
+            try:
+                self.seek_offset_sec = self.get_position_sec()
+                self.PauseFunc(self.player_ptr)
+                self.is_playing = False
+                self.is_paused = True
+            except Exception:
+                pass
+
+    def stop(self):
+        if self.player_ptr.value:
+            try:
+                self.StopFunc(self.player_ptr)
+                self.seek_offset_sec = 0.0
+                self.is_playing = False
+                self.is_paused = False
+            except Exception:
+                pass
+
+    def seek(self, sec):
+        if self.player_ptr.value:
+            try:
+                pv = PROPVARIANT()
+                pv.vt = 20  # VT_I8
+                pv.hVal = int(sec * 10000000)
+                self.SetPosFunc(self.player_ptr, ctypes.byref(GUID_NULL), ctypes.byref(pv))
+                self.seek_offset_sec = sec
+                self.play_start_time = time.time()
+            except Exception:
+                pass
+
+    def set_volume(self, vol_pct):
+        if self.player_ptr.value:
+            try:
+                f_vol = max(0.0, min(1.0, float(vol_pct) / 100.0))
+                self.SetVolFunc(self.player_ptr, f_vol)
+            except Exception:
+                pass
+
+    def get_position_sec(self):
+        if not self.is_playing:
+            return self.seek_offset_sec
+        return self.seek_offset_sec + (time.time() - self.play_start_time)
+
+    def close(self):
+        if self.player_ptr.value:
+            try:
+                self.stop()
+                self.RelFunc(self.player_ptr)
+            except Exception:
+                pass
+            self.player_ptr = ctypes.c_void_p()
 
 
 class JapaneseASMRApp(tk.Tk):
@@ -953,7 +1150,9 @@ class JapaneseASMRApp(tk.Tk):
         self.placeholder_text = "RJ01673437"
         self.opt_detailed_name = tk.BooleanVar(value=self.config.get("use_detailed_filename", False))
 
-        # Audio Player State (Windows Native MCI Engine)
+        # Audio Player State (Windows Native MCI & Media Foundation Engine)
+        self.mf_player = NativeMFPlayer()
+        self.use_mf_player = False
         self.current_playing_file = None
         self.current_playing_meta = {}
         self.is_playing = False
@@ -1970,6 +2169,11 @@ class JapaneseASMRApp(tk.Tk):
             except Exception:
                 pass
         self._player_stop()
+        if hasattr(self, "mf_player"):
+            try:
+                self.mf_player.close()
+            except Exception:
+                pass
         self.destroy()
 
     def _add_to_queue(self):
@@ -2415,11 +2619,12 @@ class JapaneseASMRApp(tk.Tk):
             title = item.get("title", "")
 
             # Nama File Output
+            out_ext = f".{get_audio_format()}"
             if self.opt_detailed_name.get() and title and title != "Memuat info..." and title != rjid:
                 clean_title = sanitize_filename(title)
-                final_output = os.path.join(download_dir, f"[{rjid}] {clean_title}.mp3")
+                final_output = os.path.join(download_dir, f"[{rjid}] {clean_title}{out_ext}")
             else:
-                final_output = os.path.join(download_dir, f"{rjid}.mp3")
+                final_output = os.path.join(download_dir, f"{rjid}{out_ext}")
 
             # Cek jika file sudah ada
             if os.path.exists(final_output):
@@ -2563,118 +2768,136 @@ class JapaneseASMRApp(tk.Tk):
                     ffmpeg_bin = get_bin_executable("ffmpeg")
                     ffmpeg_dir = os.path.dirname(os.path.abspath(ffmpeg_bin))
 
-                    cmd_ytdlp = [
-                        ytdlp_bin,
-                        "--newline",
-                        "--ffmpeg-location", ffmpeg_dir,
-                        "-N", conn_val,
-                        "--downloader", aria2c_bin,
-                        "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --summary-interval=1",
-                        "--fixup", "never",
-                        "--add-header", f"Referer: {t_ref}",
-                        "--add-header", f"Origin: {t_ref}",
-                        "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
-                        "--user-agent", USER_AGENT,
-                        t_url,
-                        "-x",
-                        "--audio-format", "mp3",
-                        "-o", t_out_tmpl,
-                    ]
-                    self.current_process = subprocess.Popen(
-                        cmd_ytdlp,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.STDOUT,
-                        text=True,
-                        bufsize=1,
-                        universal_newlines=True,
-                        encoding="utf-8",
-                        errors="replace",
-                        creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
-                    )
-
-                    # Baca stream output secara real-time untuk update indikator kecepatan, ETA, dan ukuran
-                    if self.current_process.stdout:
-                        for raw_line in iter(self.current_process.stdout.readline, ""):
-                            if self.stop_requested:
-                                break
-                            line_s = raw_line.strip()
-                            if not line_s:
-                                continue
-
-                            # 1. Parse format standar yt-dlp
-                            m_yt = RE_YTDLP_PROGRESS.search(line_s)
-                            if m_yt:
-                                pct_val = float(m_yt.group(1))
-                                total_sz = m_yt.group(2) or "-"
-                                sp = m_yt.group(3) or "-"
-                                et = m_yt.group(4) or "-"
-                                track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
-                                cur_overall = base_pct + item_step * track_part
-                                self._update_progress(
-                                    cur_overall,
-                                    status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
-                                    speed=f"Kecepatan: {sp}",
-                                    eta=f"Sisa Waktu: {et}",
-                                    size_str=f"Total: ~{total_sz}",
-                                )
-                                continue
-
-                            # 2. Parse format summary aria2c
-                            m_ar = RE_ARIA2_PROGRESS.search(line_s)
-                            if m_ar:
-                                cur_sz = m_ar.group(1)
-                                tot_sz = m_ar.group(2)
-                                pct_val = float(m_ar.group(3))
-                                sp = f"{m_ar.group(4)}/s"
-                                et = m_ar.group(5)
-                                track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
-                                cur_overall = base_pct + item_step * track_part
-                                self._update_progress(
-                                    cur_overall,
-                                    status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
-                                    speed=f"Kecepatan: {sp}",
-                                    eta=f"Sisa Waktu: {et}",
-                                    size_str=f"Ukuran: {cur_sz} / {tot_sz}",
-                                )
-                                continue
-
-                            # 3. Parse format fragment HLS
-                            m_fr = RE_FRAG_PROGRESS.search(line_s)
-                            if m_fr:
-                                cur_f = int(m_fr.group(1))
-                                tot_f = int(m_fr.group(2))
-                                if tot_f > 0:
-                                    pct_val = (cur_f / tot_f) * 100.0
-                                    track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
-                                    cur_overall = base_pct + item_step * track_part
-                                    self._update_progress(
-                                        cur_overall,
-                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} (Frag {cur_f}/{tot_f})",
-                                        speed=None,
-                                        eta=None,
-                                        size_str=f"Segmen: {cur_f}/{tot_f}",
-                                    )
-                                    continue
-
-                            # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative]
-                            if line_s.startswith("ERROR:") or line_s.startswith("WARNING:"):
-                                self._log(f"  [!] {line_s}")
-                            elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file"]):
-                                self._log(f"  {line_s}")
-
-                    self.current_process.wait()
-
-                    if self.stop_requested:
-                        break
-
-                    # Deteksi file audio yang berhasil dibuat
                     possible_files = [
                         t_final_mp3,
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}_.mp3"),
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.(ext)s.mp3"),
                         os.path.join(temp_dir, f"temp_{rjid}_t{t_idx}.mp4"),
                     ]
-                    actual_file = next((f for f in possible_files if os.path.exists(f) and os.path.getsize(f) > 0), None)
+
+                    actual_file = None
+                    max_track_attempts = 3
+                    for attempt_idx in range(1, max_track_attempts + 1):
+                        if self.stop_requested:
+                            break
+
+                        if attempt_idx > 1:
+                            self._log(f"  [i] Mengulang pengunduhan {t_name} (Percobaan {attempt_idx}/{max_track_attempts})...")
+                            time.sleep(2)
+
+                        cmd_ytdlp = [
+                            ytdlp_bin,
+                            "--newline",
+                            "--ffmpeg-location", ffmpeg_dir,
+                            "--socket-timeout", "60",
+                            "--retries", "10",
+                            "--extractor-retries", "5",
+                            "--fragment-retries", "10",
+                            "--retry-sleep", "3",
+                            "-N", conn_val,
+                            "--downloader", aria2c_bin,
+                            "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+                            "--fixup", "never",
+                            "--add-header", f"Referer: {t_ref}",
+                            "--add-header", f"Origin: {t_ref}",
+                            "--add-header", "Accept-Language: zh-CN,zh;q=0.9,ja;q=0.8,en;q=0.7",
+                            "--user-agent", USER_AGENT,
+                            t_url,
+                            "-x",
+                            "--audio-format", "mp3",
+                            "-o", t_out_tmpl,
+                        ]
+                        self.current_process = subprocess.Popen(
+                            cmd_ytdlp,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.STDOUT,
+                            text=True,
+                            bufsize=1,
+                            universal_newlines=True,
+                            encoding="utf-8",
+                            errors="replace",
+                            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                        )
+
+                        # Baca stream output secara real-time untuk update indikator kecepatan, ETA, dan ukuran
+                        if self.current_process.stdout:
+                            for raw_line in iter(self.current_process.stdout.readline, ""):
+                                if self.stop_requested:
+                                    break
+                                line_s = raw_line.strip()
+                                if not line_s:
+                                    continue
+
+                                # 1. Parse format standar yt-dlp
+                                m_yt = RE_YTDLP_PROGRESS.search(line_s)
+                                if m_yt:
+                                    pct_val = float(m_yt.group(1))
+                                    total_sz = m_yt.group(2) or "-"
+                                    sp = m_yt.group(3) or "-"
+                                    et = m_yt.group(4) or "-"
+                                    track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                    cur_overall = base_pct + item_step * track_part
+                                    self._update_progress(
+                                        cur_overall,
+                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
+                                        speed=f"Kecepatan: {sp}",
+                                        eta=f"Sisa Waktu: {et}",
+                                        size_str=f"Total: ~{total_sz}",
+                                    )
+                                    continue
+
+                                # 2. Parse format summary aria2c
+                                m_ar = RE_ARIA2_PROGRESS.search(line_s)
+                                if m_ar:
+                                    cur_sz = m_ar.group(1)
+                                    tot_sz = m_ar.group(2)
+                                    pct_val = float(m_ar.group(3))
+                                    sp = f"{m_ar.group(4)}/s"
+                                    et = m_ar.group(5)
+                                    track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                    cur_overall = base_pct + item_step * track_part
+                                    self._update_progress(
+                                        cur_overall,
+                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
+                                        speed=f"Kecepatan: {sp}",
+                                        eta=f"Sisa Waktu: {et}",
+                                        size_str=f"Ukuran: {cur_sz} / {tot_sz}",
+                                    )
+                                    continue
+
+                                # 3. Parse format fragment HLS
+                                m_fr = RE_FRAG_PROGRESS.search(line_s)
+                                if m_fr:
+                                    cur_f = int(m_fr.group(1))
+                                    tot_f = int(m_fr.group(2))
+                                    if tot_f > 0:
+                                        pct_val = (cur_f / tot_f) * 100.0
+                                        track_part = t_start_ratio + (t_end_ratio - t_start_ratio) * (pct_val / 100.0)
+                                        cur_overall = base_pct + item_step * track_part
+                                        self._update_progress(
+                                            cur_overall,
+                                            status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} (Frag {cur_f}/{tot_f})",
+                                            speed=None,
+                                            eta=None,
+                                            size_str=f"Segmen: {cur_f}/{tot_f}",
+                                        )
+                                        continue
+
+                                # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative]
+                                if line_s.startswith("ERROR:") or line_s.startswith("WARNING:"):
+                                    self._log(f"  [!] {line_s}")
+                                elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file"]):
+                                    self._log(f"  {line_s}")
+
+                        self.current_process.wait()
+
+                        # Deteksi file audio yang berhasil dibuat
+                        actual_file = next((f for f in possible_files if os.path.exists(f) and os.path.getsize(f) > 0), None)
+                        if actual_file:
+                            break
+
+                    if self.stop_requested:
+                        break
 
                     if not actual_file:
                         raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh atau diekstrak.")
@@ -2683,91 +2906,28 @@ class JapaneseASMRApp(tk.Tk):
                 if self.stop_requested:
                     break
 
-                # 3. Embed Thumbnail & Full Metadata ke MP3 (serta Concatenate jika Multi-track)
-                artist_val = item.get("cv", "")
-                if not artist_val or artist_val == "-":
-                    artist_val = "JapaneseASMR"
-                album_val = item.get("circle", "")
-                if not album_val or album_val == "-":
-                    album_val = rjid
-                genre_val = item.get("genre", "")
-                if not genre_val or genre_val == "-":
-                    genre_val = "ASMR"
-                rating_val = item.get("age_rating", "-")
-
-                self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata ID3...")
-                ffmpeg_bin = get_bin_executable("ffmpeg")
-
+                # 3. Embed Cover Art, Metadata & Chapters ke format audio pilihan (M4A / MP3)
+                self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata...")
                 if len(downloaded_track_files) > 1:
-                    self._log(f"[3/3] Menggabungkan {len(tracks)} track & menyematkan metadata ID3...")
-                    concat_list_file = os.path.join(temp_dir, f"concat_{rjid}.txt")
-                    temp_files.append(concat_list_file)
-                    with open(concat_list_file, "w", encoding="utf-8") as f_concat:
-                        for tf in downloaded_track_files:
-                            safe_p = os.path.abspath(tf).replace("\\", "/")
-                            f_concat.write(f"file '{safe_p}'\n")
-
-                    cmd_ffmpeg = [
-                        ffmpeg_bin,
-                        "-hide_banner",
-                        "-loglevel", "error",
-                        "-y",
-                        "-f", "concat",
-                        "-safe", "0",
-                        "-i", concat_list_file,
-                        "-i", temp_cover,
-                        "-map", "0:a",
-                        "-map", "1:v",
-                        "-c:a", "libmp3lame",
-                        "-b:a", "192k",
-                        "-c:v", "mjpeg",
-                        "-disposition:v:0", "attached_pic",
-                        "-id3v2_version", "3",
-                        "-metadata:s:v", "title=Album cover",
-                        "-metadata:s:v", "comment=Cover (front)",
-                        "-metadata", f"title={title if title else rjid}",
-                        "-metadata", f"artist={artist_val}",
-                        "-metadata", f"album={album_val}",
-                        "-metadata", f"genre={genre_val}",
-                        "-metadata", f"comment=Rating: {rating_val} | Tracks: {len(tracks)} Gabungan ({', '.join(track_names)})",
-                        final_output,
-                    ]
+                    self._log(f"[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...")
                 else:
-                    self._log("[3/3] Menyematkan cover art, Genre, Rating & metadata ID3...")
-                    cmd_ffmpeg = [
-                        ffmpeg_bin,
-                        "-hide_banner",
-                        "-loglevel", "error",
-                        "-y",
-                        "-i", downloaded_track_files[0],
-                        "-i", temp_cover,
-                        "-map", "0:a",
-                        "-map", "1:v",
-                        "-c:a", "copy",
-                        "-c:v", "mjpeg",
-                        "-disposition:v:0", "attached_pic",
-                        "-id3v2_version", "3",
-                        "-metadata:s:v", "title=Album cover",
-                        "-metadata:s:v", "comment=Cover (front)",
-                        "-metadata", f"title={title if title else rjid}",
-                        "-metadata", f"artist={artist_val}",
-                        "-metadata", f"album={album_val}",
-                        "-metadata", f"genre={genre_val}",
-                        "-metadata", f"comment=Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}",
-                        final_output,
-                    ]
+                    self._log(f"[3/3] Menyematkan cover art, penanda bab & metadata...")
 
-                self.current_process = subprocess.Popen(
-                    cmd_ffmpeg,
-                    creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+                embed_cover_and_merge(
+                    track_files=downloaded_track_files,
+                    cover_path=temp_cover,
+                    output_name=final_output,
+                    track_names=track_names,
+                    meta=item,
+                    rj_id=rjid,
+                    log_func=self._log,
                 )
-                self.current_process.wait()
 
                 if self.stop_requested:
                     break
 
                 # Validasi ketat file output
-                if self.current_process.returncode != 0 or not os.path.exists(final_output) or os.path.getsize(final_output) == 0:
+                if not os.path.exists(final_output) or os.path.getsize(final_output) == 0:
                     raise RuntimeError(f"Gagal memproses file audio final: {os.path.basename(final_output)}")
 
                 if self.stop_requested:
@@ -3026,33 +3186,47 @@ class JapaneseASMRApp(tk.Tk):
 
         self._player_stop()
         short_path = os.path.abspath(file_path)
-        self._mci_send("close asmr_player")
-        err, _ = self._mci_send(f'open "{short_path}" type mpegvideo alias asmr_player')
-        if err != 0:
-            err, _ = self._mci_send(f'open "{short_path}" alias asmr_player')
-        if err != 0:
-            show_dark_error(self, "Gagal Memutar", "Format audio tidak dapat diputar oleh sistem MCI.")
-            return
+        is_m4a = short_path.lower().endswith((".m4a", ".aac", ".mp4"))
 
-        self._mci_send("set asmr_player time format milliseconds")
-        _, len_str = self._mci_send("status asmr_player length")
-        try:
-            mci_len = int(len_str)
-        except ValueError:
-            mci_len = 0
-
-        self.mci_raw_duration_ms = mci_len if mci_len > 0 else 0
-
-        # Ambil durasi presisi via FFmpeg agar tidak terdistorsi bug VBR Windows MCI
+        # Ambil durasi presisi via FFmpeg agar konsisten
         precise_dur = self._get_precise_duration_ms(short_path)
-        if precise_dur > 0:
-            self.player_duration_ms = precise_dur
-            if self.mci_raw_duration_ms <= 0:
-                self.mci_raw_duration_ms = precise_dur
-        else:
-            self.player_duration_ms = self.mci_raw_duration_ms
+        self.player_duration_ms = precise_dur
 
-        self._mci_send("play asmr_player")
+        if is_m4a:
+            # Gunakan engine Windows Media Foundation (MFPlay) untuk berkas M4A/AAC
+            if not self.mf_player.load(short_path):
+                show_dark_error(self, "Gagal Memutar", f"Format audio tidak dapat diputar: {os.path.basename(file_path)}")
+                return
+            self.use_mf_player = True
+            self.mf_player.play()
+        else:
+            # Berkas MP3: Coba MCI terlebih dahulu
+            self._mci_send("close asmr_player")
+            err, _ = self._mci_send(f'open "{short_path}" type mpegvideo alias asmr_player')
+            if err != 0:
+                err, _ = self._mci_send(f'open "{short_path}" alias asmr_player')
+
+            if err == 0:
+                self.use_mf_player = False
+                self._mci_send("set asmr_player time format milliseconds")
+                _, len_str = self._mci_send("status asmr_player length")
+                try:
+                    mci_len = int(len_str)
+                except ValueError:
+                    mci_len = 0
+                self.mci_raw_duration_ms = mci_len if mci_len > 0 else precise_dur
+                if self.player_duration_ms <= 0:
+                    self.player_duration_ms = self.mci_raw_duration_ms
+                self._mci_send("play asmr_player")
+            else:
+                # Fallback ke Media Foundation jika MCI gagal
+                if self.mf_player.load(short_path):
+                    self.use_mf_player = True
+                    self.mf_player.play()
+                else:
+                    show_dark_error(self, "Gagal Memutar", "Format audio tidak dapat diputar oleh sistem.")
+                    return
+
         self.is_playing = True
         self.is_paused = False
         self.current_playing_file = file_path
@@ -3137,20 +3311,29 @@ class JapaneseASMRApp(tk.Tk):
             return
 
         if self.is_playing:
-            self._mci_send("pause asmr_player")
+            if self.use_mf_player:
+                self.mf_player.pause()
+            else:
+                self._mci_send("pause asmr_player")
             self.is_playing = False
             self.is_paused = True
             self.btn_play_pause.config(text="▶ Putar")
         else:
-            self._mci_send("play asmr_player")
+            if self.use_mf_player:
+                self.mf_player.play()
+            else:
+                self._mci_send("play asmr_player")
             self.is_playing = True
             self.is_paused = False
             self.btn_play_pause.config(text="❚❚ Jeda")
             self._player_schedule_tick()
 
     def _player_stop(self):
-        self._mci_send("stop asmr_player")
-        self._mci_send("seek asmr_player to start")
+        if self.use_mf_player:
+            self.mf_player.stop()
+        else:
+            self._mci_send("stop asmr_player")
+            self._mci_send("seek asmr_player to start")
         self.is_playing = False
         self.is_paused = False
         self.btn_play_pause.config(text="▶ Putar")
@@ -3167,19 +3350,28 @@ class JapaneseASMRApp(tk.Tk):
         if not self.current_playing_file or self.player_duration_ms <= 0:
             return
         target_pct = self.timeline_slider.get()
-        ref_len = self.mci_raw_duration_ms if self.mci_raw_duration_ms > 0 else self.player_duration_ms
-        target_ms = int(float(target_pct) * ref_len / 100.0)
-        self._mci_send(f"seek asmr_player to {target_ms}")
-        if self.is_playing:
-            self._mci_send("play asmr_player")
+        if self.use_mf_player:
+            target_sec = (float(target_pct) / 100.0) * (self.player_duration_ms / 1000.0)
+            self.mf_player.seek(target_sec)
+            if self.is_playing:
+                self.mf_player.play()
+        else:
+            ref_len = self.mci_raw_duration_ms if self.mci_raw_duration_ms > 0 else self.player_duration_ms
+            target_ms = int(float(target_pct) * ref_len / 100.0)
+            self._mci_send(f"seek asmr_player to {target_ms}")
+            if self.is_playing:
+                self._mci_send("play asmr_player")
 
     def _player_set_volume(self, val):
         vol_pct = int(float(val))
         if hasattr(self, "lbl_vol_val"):
             self.lbl_vol_val.config(text=f"{vol_pct}%")
-        # MCI volume range: 0 sampai 1000
-        mci_vol = int(vol_pct * 10)
-        self._mci_send(f"setaudio asmr_player volume to {mci_vol}")
+        if self.use_mf_player:
+            self.mf_player.set_volume(vol_pct)
+        else:
+            # MCI volume range: 0 sampai 1000
+            mci_vol = int(vol_pct * 10)
+            self._mci_send(f"setaudio asmr_player volume to {mci_vol}")
 
     def _player_prev_track(self):
         if not self.playlist_items:
@@ -3210,6 +3402,33 @@ class JapaneseASMRApp(tk.Tk):
 
     def _player_tick(self):
         if not self.is_playing or not self.current_playing_file:
+            return
+
+        if self.use_mf_player:
+            pos_sec = self.mf_player.get_position_sec()
+            pos_ms = int(pos_sec * 1000)
+            dur_ms = self.player_duration_ms
+            if dur_ms > 0:
+                ratio = max(0.0, min(1.0, pos_ms / float(dur_ms)))
+            else:
+                ratio = 0.0
+
+            if not self.is_user_dragging_slider and dur_ms > 0:
+                pct = ratio * 100.0
+                self.timeline_slider.set(pct)
+                self.lbl_time_cur.config(text=self._format_time(pos_ms))
+
+            # Cek jika track selesai
+            if dur_ms > 0 and pos_ms >= dur_ms - 500:
+                if self.is_looping:
+                    self.mf_player.seek(0)
+                    self.mf_player.play()
+                    self._player_schedule_tick()
+                else:
+                    self._player_next_track()
+                return
+
+            self._player_schedule_tick()
             return
 
         _, pos_str = self._mci_send("status asmr_player position")

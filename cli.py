@@ -6,6 +6,8 @@ import urllib.request
 from config_manager import (
     add_to_history,
     discover_all_audio_tracks,
+    embed_cover_and_merge,
+    get_audio_format,
     get_bin_executable,
     get_download_dir,
     load_config,
@@ -104,6 +106,7 @@ def download_cover(cover_url, output_path, rj_id=None, dlsite_cover=None):
 
 
 def download_audio(audio_url, output_tmpl, referer=REFERER):
+    import time
     ytdlp_bin = get_bin_executable("yt-dlp")
     aria2c_bin = get_bin_executable("aria2c")
     ffmpeg_bin = get_bin_executable("ffmpeg")
@@ -112,9 +115,14 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
     cmd = [
         ytdlp_bin,
         "--ffmpeg-location", ffmpeg_dir,
+        "--socket-timeout", "60",
+        "--retries", "10",
+        "--extractor-retries", "5",
+        "--fragment-retries", "10",
+        "--retry-sleep", "3",
         "-N", "16",
         "--downloader", aria2c_bin,
-        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M",
+        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
         "--fixup", "never",
         "--add-header", f"Referer: {referer}",
         "--add-header", f"Origin: {referer}",
@@ -125,85 +133,19 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
         "--audio-format", "mp3",
         "-o", output_tmpl,
     ]
-    subprocess.run(cmd, check=True)
 
-
-def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None, meta=None):
-    ffmpeg_bin = get_bin_executable("ffmpeg")
-    meta = meta or {}
-    title_val = meta.get("title") or os.path.splitext(os.path.basename(output_name))[0]
-    artist_val = meta.get("cv") if meta.get("cv") and meta.get("cv") != "-" else "JapaneseASMR"
-    album_val = meta.get("circle") if meta.get("circle") and meta.get("circle") != "-" else "JapaneseASMR"
-    genre_val = meta.get("genre") if meta.get("genre") and meta.get("genre") != "-" else "ASMR"
-    rating_val = meta.get("age_rating") or "-"
-
-    if len(track_files) > 1:
-        temp_dir = os.path.dirname(track_files[0])
-        concat_list_file = os.path.join(temp_dir, "concat_cli_list.txt")
-        with open(concat_list_file, "w", encoding="utf-8") as f_concat:
-            for tf in track_files:
-                safe_p = os.path.abspath(tf).replace("\\", "/")
-                f_concat.write(f"file '{safe_p}'\n")
-
-        comment_val = f"Rating: {rating_val} | Tracks: {len(track_files)} Gabungan ({', '.join(track_names)})" if track_names else f"Tracks: {len(track_files)} Gabungan"
-        cmd = [
-            ffmpeg_bin,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
-            "-f", "concat",
-            "-safe", "0",
-            "-i", concat_list_file,
-            "-i", cover_path,
-            "-map", "0:a",
-            "-map", "1:v",
-            "-c:a", "libmp3lame",
-            "-b:a", "192k",
-            "-c:v", "mjpeg",
-            "-disposition:v:0", "attached_pic",
-            "-id3v2_version", "3",
-            "-metadata:s:v", "title=Album cover",
-            "-metadata:s:v", "comment=Cover (front)",
-            "-metadata", f"title={title_val}",
-            "-metadata", f"artist={artist_val}",
-            "-metadata", f"album={album_val}",
-            "-metadata", f"genre={genre_val}",
-            "-metadata", f"comment={comment_val}",
-            output_name,
-        ]
+    max_attempts = 3
+    for attempt in range(1, max_attempts + 1):
         try:
+            if attempt > 1:
+                print(f"{YELLOW}[i] Mengulang unduhan (Percobaan {attempt}/{max_attempts})...{RESET}")
+                time.sleep(2)
             subprocess.run(cmd, check=True)
-        finally:
-            if os.path.exists(concat_list_file):
-                try:
-                    os.remove(concat_list_file)
-                except OSError:
-                    pass
-    else:
-        comment_val = f"Rating: {rating_val} | Circle: {album_val} | CV: {artist_val}"
-        cmd = [
-            ffmpeg_bin,
-            "-hide_banner",
-            "-loglevel", "error",
-            "-y",
-            "-i", track_files[0],
-            "-i", cover_path,
-            "-map", "0:a",
-            "-map", "1:v",
-            "-c:a", "copy",
-            "-c:v", "mjpeg",
-            "-disposition:v:0", "attached_pic",
-            "-id3v2_version", "3",
-            "-metadata:s:v", "title=Album cover",
-            "-metadata:s:v", "comment=Cover (front)",
-            "-metadata", f"title={title_val}",
-            "-metadata", f"artist={artist_val}",
-            "-metadata", f"album={album_val}",
-            "-metadata", f"genre={genre_val}",
-            "-metadata", f"comment={comment_val}",
-            output_name,
-        ]
-        subprocess.run(cmd, check=True)
+            return
+        except subprocess.CalledProcessError:
+            if attempt == max_attempts:
+                raise
+
 
 
 def cleanup_temp_files(temp_files):
@@ -229,12 +171,13 @@ def process_single_id(rj_id, current_index, total_count):
     age_rating = meta.get("age_rating", "-")
     cover_url = meta.get("cover_url") or f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg"
 
+    out_ext = f".{get_audio_format()}"
     # Penamaan file output sesuai opsi config
     if cfg.get("use_detailed_filename") and title and title != rj_id:
         clean_title = sanitize_filename(title)
-        final_output = os.path.join(download_dir, f"[{rj_id}] {clean_title}.mp3")
+        final_output = os.path.join(download_dir, f"[{rj_id}] {clean_title}{out_ext}")
     else:
-        final_output = os.path.join(download_dir, f"{rj_id}.mp3")
+        final_output = os.path.join(download_dir, f"{rj_id}{out_ext}")
 
     progress_info = f"[{current_index}/{total_count}] " if total_count > 1 else ""
 
@@ -312,12 +255,20 @@ def process_single_id(rj_id, current_index, total_count):
                 raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
             downloaded_track_files.append(actual_file)
 
-        # 3. Merge Tracks & Embed Cover Art + ID3 Tags
+        # 3. Merge Tracks & Embed Cover Art + Metadata & Chapters
         if len(downloaded_track_files) > 1:
-            print(f"{CYAN}[3/3] Menggabungkan {len(tracks)} track & menyematkan cover art + ID3...{RESET}")
+            print(f"{CYAN}[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...{RESET}")
         else:
-            print(f"{CYAN}[3/3] Menyematkan cover art & ID3 ke file MP3...{RESET}")
-        embed_cover_and_merge(downloaded_track_files, temp_cover, final_output, track_names, meta=meta)
+            print(f"{CYAN}[3/3] Menyematkan cover art, penanda bab & metadata...{RESET}")
+        embed_cover_and_merge(
+            downloaded_track_files,
+            temp_cover,
+            final_output,
+            track_names=track_names,
+            meta=meta,
+            rj_id=rj_id,
+            log_func=lambda msg: print(f"{CYAN}{msg}{RESET}"),
+        )
 
         # Simpan ke riwayat unduhan
         add_to_history(
