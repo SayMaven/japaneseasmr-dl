@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.request
 from PIL import Image
 
 # Daftarkan folder bin/ ke PATH environment agar binary (yt-dlp, ffmpeg, aria2c) selalu ditemukan
@@ -692,6 +693,220 @@ def get_audio_codec(file_path):
     return ""
 
 
+def resolve_japaneseasmr_url_to_rjid(url):
+    """Mengekstrak Kode RJ asli dari URL halaman posting japaneseasmr.com (misal https://japaneseasmr.com/150854/)."""
+    import urllib.request
+    import re
+    if not url or "japaneseasmr.com" not in str(url).lower():
+        return None
+    try:
+        headers = {"User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"}
+        req = urllib.request.Request(str(url).strip(), headers=headers)
+        with urllib.request.urlopen(req, timeout=6) as resp:
+            html = resp.read().decode("utf-8", errors="replace")
+        m = re.search(r'https?://v\.weeab0o\.xyz/(RJ\d+)', html, re.I)
+        if m:
+            return m.group(1).upper()
+        m2 = re.search(r'product_id/(RJ\d+)', html, re.I)
+        if m2:
+            return m2.group(1).upper()
+        m3 = re.search(r'\b(RJ\d{6,8})\b', html, re.I)
+        if m3:
+            return m3.group(1).upper()
+    except Exception:
+        pass
+    return None
+
+
+def resolve_input_to_rjid(input_str):
+    """
+    Mengonversi input pengguna (Kode RJ murni, tautan asmr.one, tautan japaneseasmr.com, atau dlsite.com)
+    menjadi Kode RJ standar (misal: 'RJ01220411').
+    """
+    import re
+    if not input_str:
+        return None
+    token = str(input_str).strip()
+    if not token:
+        return None
+
+    # 1. Tautan asmr.one (misal https://asmr.one/work/RJ01220411 atau /work/01220411)
+    if "asmr.one" in token.lower():
+        m = re.search(r'asmr\.one/(?:work|api/work)/([A-Za-z0-9]+)', token, re.I)
+        if m:
+            val = m.group(1).upper()
+            if not val.startswith("RJ"):
+                val = f"RJ{val}"
+            return val
+
+    # 2. Tautan japaneseasmr.com (misal https://japaneseasmr.com/151339/)
+    if "japaneseasmr.com" in token.lower():
+        rj = resolve_japaneseasmr_url_to_rjid(token)
+        if rj:
+            return rj
+
+    # 3. Tautan DLsite (misal https://www.dlsite.com/maniax/work/=/product_id/RJ01220411.html)
+    if "dlsite.com" in token.lower():
+        m = re.search(r'product_id/(RJ\d+)', token, re.I)
+        if m:
+            return m.group(1).upper()
+
+    # 4. Kode RJ langsung atau angka murni
+    m = re.search(r'(RJ\d+|\b\d{5,8}\b)', token, re.I)
+    if m:
+        val = m.group(1).upper()
+        if not val.startswith("RJ"):
+            val = f"RJ{val}"
+        return val
+
+    clean_val = token.upper()
+    if re.match(r'^\d+$', clean_val):
+        return f"RJ{clean_val}"
+    return clean_val
+
+
+def fetch_japaneseasmr_chapters(rj_id_or_url):
+    """
+    Mengambil daftar penanda bab (chapters / tracklist) langsung dari situs japaneseasmr.com:
+    - Jika input berupa URL pos japaneseasmr.com (misal: https://japaneseasmr.com/150854/), unduh pos tersebut.
+    - Jika input berupa Kode RJ (misal: RJ01691063), cari di japaneseasmr.com/?s={rj_id} untuk menemukan tautan pos terkait.
+    - Ekstrak waktu mulai (milidetik) dan judul track dari tabel .chapter_list atau konten pos.
+    Mengembalikan: list of dict [{"start": ms, "title": "..."}]
+    """
+    import urllib.request
+    from bs4 import BeautifulSoup
+    import re
+
+    clean_target = str(rj_id_or_url).strip()
+    if not clean_target:
+        return []
+
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36",
+        "Referer": "https://japaneseasmr.com/",
+    }
+
+    target_url = None
+    if clean_target.startswith("http://") or clean_target.startswith("https://"):
+        target_url = clean_target
+    else:
+        clean_id = clean_target.upper()
+        search_url = f"https://japaneseasmr.com/?s={clean_id}"
+        try:
+            req = urllib.request.Request(search_url, headers=headers)
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                s_html = resp.read().decode("utf-8", errors="replace")
+            soup_s = BeautifulSoup(s_html, "html.parser")
+            entries = soup_s.find_all(class_=re.compile(r"entry-title|post-title"))
+            for ent in entries:
+                a_tag = ent.find("a")
+                if a_tag and a_tag.get("href"):
+                    if clean_id in ent.get_text().upper() or not target_url:
+                        target_url = a_tag["href"]
+                        if clean_id in ent.get_text().upper():
+                            break
+            if not target_url:
+                posts = re.findall(r"https://japaneseasmr\.com/\d+/", s_html)
+                if posts:
+                    target_url = posts[0]
+        except Exception:
+            return []
+
+    if not target_url:
+        return []
+
+    try:
+        req = urllib.request.Request(target_url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            p_html = resp.read().decode("utf-8", errors="replace")
+    except Exception:
+        return []
+
+    def _parse_ts(ts):
+        parts = ts.strip().split(":")
+        try:
+            if len(parts) == 3:
+                return int(parts[0]) * 3600 + int(parts[1]) * 60 + float(parts[2])
+            elif len(parts) == 2:
+                return int(parts[0]) * 60 + float(parts[1])
+        except Exception:
+            pass
+        return None
+
+    soup = BeautifulSoup(p_html, "html.parser")
+    raw_chapters = []
+    seen = set()
+
+    for tr in soup.find_all("tr"):
+        time_td = tr.find("td", class_=lambda c: c and "start_time" in c)
+        title_td = tr.find("td", class_=lambda c: c and "chapter_title" in c)
+        if time_td and title_td:
+            sec_val = None
+            link = time_td.find("a")
+            if link and link.get("data-value"):
+                try:
+                    sec_val = float(link.get("data-value"))
+                except (ValueError, TypeError):
+                    pass
+            time_text = time_td.get_text(strip=True)
+            if sec_val is None and time_text:
+                sec_val = _parse_ts(time_text)
+
+            title_text = ""
+            tlink = title_td.find("a")
+            if tlink and tlink.get("data-track-title"):
+                title_text = tlink.get("data-track-title").strip()
+            if not title_text:
+                title_text = title_td.get_text(strip=True)
+
+            if sec_val is not None and title_text:
+                key = (sec_val, title_text)
+                if key not in seen:
+                    seen.add(key)
+                    raw_chapters.append((sec_val, title_text))
+
+    # Fallback teks jika tidak ada tabel chapter_list
+    if not raw_chapters:
+        entry_content = soup.find(class_=re.compile(r"entry-content|post-content"))
+        if entry_content:
+            text = entry_content.get_text()
+            # Pola 1: Timestamp awal baris (misal: "00:00:00 Track 1")
+            for m in re.finditer(r"(?:^|\n)\s*(\d{1,2}:\d{2}(?::\d{2})?)\s+([^\n\r<]+)", text):
+                sec = _parse_ts(m.group(1))
+                t_str = m.group(2).strip()
+                if sec is not None and t_str and len(t_str) < 120:
+                    key = (sec, t_str)
+                    if key not in seen:
+                        seen.add(key)
+                        raw_chapters.append((sec, t_str))
+
+            # Pola 2: Nama track + durasi masing-masing (misal: "00 introduction 2:38", "01 ... 5:26")
+            if not raw_chapters:
+                dur_matches = re.findall(r"(?:^|\s)(\d{1,2}\s+[^\s\d][^\n\r\t]{1,60}?)\s+(\d{1,2}:\d{2})(?=\s|$)", text)
+                if len(dur_matches) >= 2:
+                    seen_titles = set()
+                    curr_sec = 0.0
+                    for t_name, dur_s in dur_matches:
+                        clean_t = t_name.strip()
+                        if clean_t in seen_titles:
+                            break
+                        seen_titles.add(clean_t)
+                        d_sec = _parse_ts(dur_s)
+                        if d_sec and d_sec > 0:
+                            raw_chapters.append((curr_sec, clean_t))
+                            curr_sec += d_sec
+
+    raw_chapters.sort(key=lambda x: x[0])
+    result = []
+    for sec, title in raw_chapters:
+        clean_name = re.sub(r"\.(?:mp3|wav|m4a|flac|aac|ogg)$", "", title, flags=re.I).strip()
+        result.append({
+            "start": int(sec * 1000),
+            "title": clean_name or "Track",
+        })
+    return result
+
+
 def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_dir=None, log_func=print):
     """
     Membuat file metadata penanda bab FFMPEG (FFMETADATA1) dengan Smart Hybrid Chapter Mapping:
@@ -701,9 +916,11 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
     - Kasus B (Multi-track 1-to-1):
       Jika jumlah track fisik sama dengan jumlah track asmr.one dan total durasi cocok (+- 2.5s),
       sinkronkan nama bab dengan judul dari asmr.one.
+    - Kasus B2 (JapaneseASMR Embedded Tracklist):
+      Jika asmr.one tidak memiliki bab/karya tersebut, ambil daftar bab dan timestamp langsung dari situs japaneseasmr.com.
     - Kasus C (Multi-track fisik murni):
-      Jika > 1 file fisik dan tidak cocok dengan asmr.one, buat bab berdasarkan file fisik masing-masing.
-    Mengembalikan: (path ke ffmetadata.txt, jumlah_bab) jika valid, atau (None, 0).
+      Jika > 1 file fisik dan tidak cocok dengan asmr.one/japaneseasmr, buat bab berdasarkan file fisik masing-masing.
+    Mengembalikan: (path ke ffmetadata.txt, jumlah_bab, list_of_chapters) jika valid, atau (None, 0, []).
     """
     import re
     if not temp_dir:
@@ -784,7 +1001,47 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
             except Exception:
                 pass
 
-    # KASUS C: Fallback Multi-track fisik murni (jika tidak cocok dengan asmr.one)
+    # KASUS B2: Jika asmr.one tidak menemukan bab (misal karya hanya ada di JapaneseASMR),
+    # cari dan ekstrak daftar bab langsung dari halaman posting japaneseasmr.com
+    if not hybrid_matched and rj_id and track_files:
+        try:
+            j_chaps = fetch_japaneseasmr_chapters(rj_id)
+            if j_chaps and len(j_chaps) > 1:
+                t0_dur = get_precise_duration_seconds(track_files[0])
+                for i, ch in enumerate(j_chaps):
+                    s_ms = ch["start"]
+                    if i + 1 < len(j_chaps):
+                        e_ms = j_chaps[i + 1]["start"]
+                    else:
+                        e_ms = int(t0_dur * 1000) if t0_dur > 0 else (s_ms + 60000)
+                    chapters.append({
+                        "start": s_ms,
+                        "end": max(s_ms + 1000, e_ms),
+                        "title": ch["title"],
+                    })
+
+                # Jika ada file fisik tambahan di disk (seperti Omake, Bonus, EX di track_files[1:])
+                if len(track_files) > 1:
+                    last_end = chapters[-1]["end"]
+                    for idx, tf in enumerate(track_files[1:], start=1):
+                        dur_sec = get_precise_duration_seconds(tf)
+                        dur_ms = int(dur_sec * 1000)
+                        t_title = track_names[idx] if (track_names and idx < len(track_names)) else f"Omake {idx}"
+                        clean_title = re.sub(r'\.(?:mp3|wav|m4a|flac|aac|ogg)$', '', t_title, flags=re.I).strip()
+                        chapters.append({
+                            "start": last_end,
+                            "end": last_end + dur_ms,
+                            "title": clean_title or f"Omake {idx}"
+                        })
+                        last_end += dur_ms
+
+                hybrid_matched = True
+                if log_func:
+                    log_func(f"[✓] Tracklist JapaneseASMR: Berhasil menyinkronkan {len(chapters)} bab cerita dari situs japaneseasmr.com!")
+        except Exception:
+            pass
+
+    # KASUS C: Fallback Multi-track fisik murni (jika tidak cocok dengan asmr.one / japaneseasmr)
     if not hybrid_matched and len(track_files) > 1:
         curr_ms = 0
         for idx, tf in enumerate(track_files):
@@ -819,7 +1076,7 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
 
 def write_cue_sheet(output_audio_path, chapters, meta=None):
     """
-    Membuat berkas CUE sheet (.cue) berdampingan dengan berkas audio .mp3
+    Membuat berkas CUE sheet (.cue) berdampingan dengan berkas audio .mp3 atau .m4a
     agar pemutar audio seperti Foobar2000, AIMP, MusicBee, dan VLC dapat mengenali
     dan menampilkan daftar bab (track splitting) secara instan.
     """
@@ -833,11 +1090,12 @@ def write_cue_sheet(output_audio_path, chapters, meta=None):
     safe_artist = artist.replace('"', "'")
     safe_album = album.replace('"', "'")
     safe_audio_fname = audio_fname.replace('"', "'")
+    file_type = "MP4" if output_audio_path.lower().endswith(".m4a") else "MP3"
 
     lines = [
         f'PERFORMER "{safe_artist}"',
         f'TITLE "{safe_album}"',
-        f'FILE "{safe_audio_fname}" MP3',
+        f'FILE "{safe_audio_fname}" {file_type}',
     ]
     for idx, ch in enumerate(chapters):
         t_num = idx + 1
@@ -1024,7 +1282,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
         base_cmd.extend(["-map", f"{cover_input_idx}:v", "-c:v", "mjpeg", "-disposition:v:0", "attached_pic"])
 
     if chapter_input_idx != -1:
-        base_cmd.extend(["-map_metadata", str(chapter_input_idx)])
+        base_cmd.extend(["-map_metadata", str(chapter_input_idx), "-map_chapters", str(chapter_input_idx)])
 
     # Metadata tags
     meta_tags = []
@@ -1091,7 +1349,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
             except subprocess.CalledProcessError:
                 _exec_ffmpeg(reencode_fallback)
 
-        # Buat berkas CUE Sheet pendamping jika format MP3 agar bab terbaca di Foobar2000
+        # Buat berkas CUE Sheet pendamping HANYA jika format MP3 agar bab terbaca di pemutar audio (Foobar2000, AIMP, GUI)
         if not is_m4a and parsed_chapters:
             cue_res = write_cue_sheet(output_name, parsed_chapters, meta=meta)
             if cue_res and log_func:

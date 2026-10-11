@@ -12,8 +12,7 @@ from config_manager import (
     get_bin_executable,
     get_download_dir,
     load_config,
-    resolve_audio_url,
-    save_config,
+    resolve_input_to_rjid,
     set_download_dir,
 )
 from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
@@ -50,11 +49,20 @@ def print_banner():
 
 
 def parse_rj_ids(input_text):
-    """Mengekstrak list ID/Kode dari input (support pemisah koma, spasi, newline)."""
+    """Mengekstrak list ID/Kode dari input (support pemisah koma, spasi, newline, dan URL asmr.one / japaneseasmr / dlsite)."""
     if not input_text.strip():
         return [DEFAULT_ID]
     raw_tokens = re.split(r"[\s,;]+", input_text.strip())
-    ids = [token.strip() for token in raw_tokens if token.strip()]
+    ids = []
+    for token in raw_tokens:
+        token = token.strip()
+        if not token:
+            continue
+        resolved = resolve_input_to_rjid(token)
+        if resolved:
+            ids.append(resolved)
+        else:
+            ids.append(token)
     return ids if ids else [DEFAULT_ID]
 
 

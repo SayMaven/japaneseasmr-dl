@@ -1,6 +1,4 @@
-import html
 import io
-import json
 import os
 import re
 import subprocess
@@ -8,20 +6,20 @@ import sys
 import threading
 import time
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, ttk
 import urllib.request
 import webbrowser
 from PIL import Image, ImageTk
 
 from config_manager import (
     add_to_history,
-    cache_cover_image,
     clear_all_history,
     clear_cover_cache,
     clear_temp_cache,
     discover_all_audio_tracks,
     embed_cover_and_merge,
     extract_chapters_from_audio,
+    fetch_japaneseasmr_chapters,
     get_audio_codec,
     get_audio_format,
     get_bin_executable,
@@ -31,11 +29,12 @@ from config_manager import (
     get_ytdlp_version,
     load_config,
     load_history,
-    resolve_audio_url,
+    resolve_input_to_rjid,
     save_config,
     set_audio_format,
     set_download_dir,
     update_ytdlp_engine,
+    write_cue_sheet,
 )
 from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
 
@@ -2247,11 +2246,8 @@ class JapaneseASMRApp(tk.Tk):
             token = token.strip()
             if not token:
                 continue
-            m = re.search(r"(RJ\d+|\d{6,8})", token, re.IGNORECASE)
-            if m:
-                rjid = m.group(1).upper()
-                if not rjid.startswith("RJ"):
-                    rjid = f"RJ{rjid}"
+            rjid = resolve_input_to_rjid(token)
+            if rjid:
                 new_ids.append(rjid)
             else:
                 new_ids.append(token.upper())
@@ -2419,6 +2415,10 @@ class JapaneseASMRApp(tk.Tk):
         try:
             clip_text = self.clipboard_get().strip()
             if clip_text:
+                if self.var_auto_clipboard.get():
+                    resolved = resolve_input_to_rjid(clip_text)
+                    if resolved:
+                        clip_text = resolved
                 self.id_entry.delete(0, "end")
                 self.id_entry.insert(0, clip_text)
                 self.id_entry.config(fg="#50fa7b")
@@ -3453,6 +3453,46 @@ class JapaneseASMRApp(tk.Tk):
         else:
             self.chap_frame.config(text=" 📑 Daftar Bab / Tracklist (0 Bab) ")
             self.chap_tree.insert("", "end", iid="none", values=("-", "(Tidak ada penanda bab / file cue)"), tags=("normal",))
+
+            # Coba sinkronisasi bab otomatis dari japaneseasmr jika berkas memiliki Kode RJ
+            m_rj = re.search(r"(RJ\d+)", os.path.basename(norm_path), re.IGNORECASE)
+            sync_attr = f"_syncing_chaps_{norm_path}"
+            if m_rj and not getattr(self, sync_attr, False):
+                setattr(self, sync_attr, True)
+                rj_cand = m_rj.group(1).upper()
+                def _bg_sync_chapters(target_file, rj):
+                    try:
+                        j_ch = fetch_japaneseasmr_chapters(rj)
+                        if j_ch and len(j_ch) > 1:
+                            tot_sec = get_precise_duration_seconds(target_file)
+                            c_list = []
+                            for i, ch in enumerate(j_ch):
+                                s_ms = ch["start"]
+                                if i + 1 < len(j_ch):
+                                    e_ms = j_ch[i + 1]["start"]
+                                else:
+                                    e_ms = int(tot_sec * 1000) if tot_sec > 0 else (s_ms + 60000)
+                                c_list.append({
+                                    "start": s_ms,
+                                    "end": max(s_ms + 1000, e_ms),
+                                    "title": ch["title"],
+                                })
+                            is_target_m4a = target_file.lower().endswith(".m4a")
+                            if not is_target_m4a:
+                                write_cue_sheet(target_file, c_list)
+                            ui_chapters = []
+                            for idx, c in enumerate(c_list):
+                                ui_chapters.append({
+                                    "index": idx + 1,
+                                    "title": c.get("title", f"Bab {idx + 1}"),
+                                    "start_ms": c.get("start", 0),
+                                })
+                            mtime = os.path.getmtime(target_file) if os.path.exists(target_file) else 0
+                            self._chapters_cache[target_file] = (mtime, ui_chapters)
+                            self.after(0, lambda: self._load_track_chapters(target_file))
+                    except Exception:
+                        pass
+                threading.Thread(target=_bg_sync_chapters, args=(norm_path, rj_cand), daemon=True).start()
 
     def _on_chapter_double_click(self, event=None):
         """Seek pemutar langsung ke waktu bab yang diklik dua kali oleh pengguna."""
