@@ -998,6 +998,9 @@ class SettingsDialog(tk.Toplevel):
 
         # Sinkronisasi ke GUI utama
         self.parent.opt_detailed_name.set(self.cfg["use_detailed_filename"])
+        if hasattr(self.parent, "var_auto_clipboard"):
+            self.parent.var_auto_clipboard.set(self.cfg["auto_clipboard"])
+        self.parent.config = dict(self.cfg)
         self.parent.lbl_current_dir.config(text=f"Lokasi Simpan: {os.path.abspath(new_dir)}")
         if hasattr(self.parent, "_refresh_playlist_view"):
             self.parent._refresh_playlist_view()
@@ -1165,6 +1168,8 @@ class JapaneseASMRApp(tk.Tk):
         self.current_preview_image = None
         self.placeholder_text = "RJ01673437"
         self.opt_detailed_name = tk.BooleanVar(value=self.config.get("use_detailed_filename", False))
+        self.var_auto_clipboard = tk.BooleanVar(value=self.config.get("auto_clipboard", True))
+        self._syncing_chaps = set()
 
         # Audio Player State (Windows Native MCI & Media Foundation Engine)
         self.mf_player = NativeMFPlayer()
@@ -2415,10 +2420,17 @@ class JapaneseASMRApp(tk.Tk):
         try:
             clip_text = self.clipboard_get().strip()
             if clip_text:
-                if self.var_auto_clipboard.get():
-                    resolved = resolve_input_to_rjid(clip_text)
-                    if resolved:
-                        clip_text = resolved
+                auto_clip = self.var_auto_clipboard.get() if hasattr(self, "var_auto_clipboard") else self.config.get("auto_clipboard", True)
+                if auto_clip:
+                    tokens = re.split(r"[\s,;]+", clip_text)
+                    resolved_tokens = []
+                    for t in tokens:
+                        if not t:
+                            continue
+                        r = resolve_input_to_rjid(t)
+                        resolved_tokens.append(r if r else t)
+                    if resolved_tokens:
+                        clip_text = ", ".join(resolved_tokens)
                 self.id_entry.delete(0, "end")
                 self.id_entry.insert(0, clip_text)
                 self.id_entry.config(fg="#50fa7b")
@@ -3456,9 +3468,13 @@ class JapaneseASMRApp(tk.Tk):
 
             # Coba sinkronisasi bab otomatis dari japaneseasmr jika berkas memiliki Kode RJ
             m_rj = re.search(r"(RJ\d+)", os.path.basename(norm_path), re.IGNORECASE)
-            sync_attr = f"_syncing_chaps_{norm_path}"
-            if m_rj and not getattr(self, sync_attr, False):
-                setattr(self, sync_attr, True)
+            sync_set = getattr(self, "_syncing_chaps", None)
+            if sync_set is None:
+                self._syncing_chaps = set()
+                sync_set = self._syncing_chaps
+
+            if m_rj and norm_path not in sync_set:
+                sync_set.add(norm_path)
                 rj_cand = m_rj.group(1).upper()
                 def _bg_sync_chapters(target_file, rj):
                     try:

@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "default_id": "RJ01673437",
     "connections": 16,
     "notify_popup": True,
-    "auto_clipboard": False,
+    "auto_clipboard": True,
     "ytdlp_channel": "stable",
     "audio_format": "auto",
 }
