@@ -21,6 +21,7 @@ from config_manager import (
     clear_temp_cache,
     discover_all_audio_tracks,
     embed_cover_and_merge,
+    get_audio_codec,
     get_audio_format,
     get_bin_executable,
     get_cache_size_info,
@@ -469,49 +470,33 @@ class SettingsDialog(tk.Toplevel):
         )
         chk_name.pack(fill="x", pady=4)
 
-        # Pilihan Format Audio Output (M4A vs MP3)
-        lbl_fmt_opt = tk.Label(
-            self.content_container,
-            text="Format Berkas Audio Output:",
+        # Informasi Format Audio Otomatis (Smart Native Container)
+        fmt_card = tk.Frame(self.content_container, bg="#282a36", padx=12, pady=10)
+        fmt_card.pack(fill="x", pady=(10, 8))
+
+        lbl_fmt_card_title = tk.Label(
+            fmt_card,
+            text="⚡ Format Audio Otomatis (Smart Native Container)",
             font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_fmt_opt.pack(fill="x", pady=(8, 2))
-
-        fmt_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        fmt_box.pack(fill="x", pady=(0, 6))
-
-        r_m4a = tk.Radiobutton(
-            fmt_box,
-            text="M4A (AAC) - Rekomendasi (Mendukung Penanda Bab / Multi-Track Foobar2000)",
-            variable=self.var_audio_format,
-            value="m4a",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
+            bg="#282a36",
             fg="#50fa7b",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#50fa7b",
             anchor="w",
         )
-        r_m4a.pack(fill="x", pady=1)
+        lbl_fmt_card_title.pack(fill="x")
 
-        r_mp3 = tk.Radiobutton(
-            fmt_box,
-            text="MP3 (LAME CBR 320k) - Format Klasik Kompatibilitas Universal",
-            variable=self.var_audio_format,
-            value="mp3",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#f8f8f2",
+        lbl_fmt_card_desc = tk.Label(
+            fmt_card,
+            text="Aplikasi otomatis mendeteksi dan mempertahankan format asli sumber:\n"
+                 "• Sumber MP3 (asmr.one) → Berkas .mp3 (Fast Remux instan < 1 detik)\n"
+                 "• Sumber AAC / m3u8 (JapaneseASMR) → Berkas .m4a (Fast Remux instan < 1 detik)\n"
+                 "Keduanya 100% lossless tanpa re-encoding, serta dilengkapi penanda bab (chapters) & cover art HD lengkap.",
+            font=("Segoe UI", 8),
+            bg="#282a36",
+            fg="#cdd6f4",
+            justify="left",
             anchor="w",
         )
-        r_mp3.pack(fill="x", pady=1)
+        lbl_fmt_card_desc.pack(fill="x", pady=(4, 0))
 
         chk_notify = tk.Checkbutton(
             self.content_container,
@@ -2618,17 +2603,24 @@ class JapaneseASMRApp(tk.Tk):
             rjid = item["rjid"]
             title = item.get("title", "")
 
-            # Nama File Output
-            out_ext = f".{get_audio_format()}"
-            if self.opt_detailed_name.get() and title and title != "Memuat info..." and title != rjid:
-                clean_title = sanitize_filename(title)
-                final_output = os.path.join(download_dir, f"[{rjid}] {clean_title}{out_ext}")
-            else:
-                final_output = os.path.join(download_dir, f"{rjid}{out_ext}")
+            # Nama File Output & Cek apakah sudah pernah diunduh
+            configured_fmt = get_audio_format()
+            clean_title = sanitize_filename(title) if (self.opt_detailed_name.get() and title and title != "Memuat info..." and title != rjid) else ""
+            base_fname = f"[{rjid}] {clean_title}" if clean_title else rjid
 
-            # Cek jika file sudah ada
-            if os.path.exists(final_output):
-                self._log(f"[SKIP] File '{os.path.basename(final_output)}' sudah ada.")
+            if configured_fmt == "auto":
+                possible_existing = [
+                    os.path.join(download_dir, f"{base_fname}.m4a"),
+                    os.path.join(download_dir, f"{base_fname}.mp3"),
+                    os.path.join(download_dir, f"{rjid}.m4a"),
+                    os.path.join(download_dir, f"{rjid}.mp3"),
+                ]
+            else:
+                possible_existing = [os.path.join(download_dir, f"{base_fname}.{configured_fmt}")]
+
+            existing_file = next((f for f in possible_existing if os.path.exists(f) and os.path.getsize(f) > 0), None)
+            if existing_file:
+                self._log(f"[SKIP] File '{os.path.basename(existing_file)}' sudah ada.")
                 item["status"] = "Selesai"
                 self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai (Ada)"))
                 self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Sudah Ada)")
@@ -2907,7 +2899,15 @@ class JapaneseASMRApp(tk.Tk):
                 if self.stop_requested:
                     break
 
-                # 3. Embed Cover Art, Metadata & Chapters ke format audio pilihan (M4A / MP3)
+                # 3. Tentukan nama dan format file output akhir (Smart Native Container)
+                if configured_fmt == "auto":
+                    first_codec = get_audio_codec(downloaded_track_files[0]) if downloaded_track_files else ""
+                    out_ext = ".m4a" if first_codec == "aac" else (".mp3" if first_codec == "mp3" else ".m4a")
+                else:
+                    out_ext = f".{configured_fmt}"
+                final_output = os.path.join(download_dir, f"{base_fname}{out_ext}")
+
+                # 3. Embed Cover Art, Metadata & Chapters ke format audio
                 self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata...")
                 if len(downloaded_track_files) > 1:
                     self._log(f"[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...")

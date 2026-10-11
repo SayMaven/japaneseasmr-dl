@@ -7,6 +7,7 @@ from config_manager import (
     add_to_history,
     discover_all_audio_tracks,
     embed_cover_and_merge,
+    get_audio_codec,
     get_audio_format,
     get_bin_executable,
     get_download_dir,
@@ -170,13 +171,27 @@ def process_single_id(rj_id, current_index, total_count):
     age_rating = meta.get("age_rating", "-")
     cover_url = meta.get("cover_url") or f"https://pic.weeabo0.xyz/{rj_id}_img_main.jpg"
 
-    out_ext = f".{get_audio_format()}"
-    # Penamaan file output sesuai opsi config
-    if cfg.get("use_detailed_filename") and title and title != rj_id:
-        clean_title = sanitize_filename(title)
-        final_output = os.path.join(download_dir, f"[{rj_id}] {clean_title}{out_ext}")
+    configured_fmt = get_audio_format()
+    clean_title = sanitize_filename(title) if (cfg.get("use_detailed_filename") and title and title != rj_id) else ""
+    base_fname = f"[{rj_id}] {clean_title}" if clean_title else rj_id
+
+    # Cek jika file sudah ada
+    if configured_fmt == "auto":
+        possible_existing = [
+            os.path.join(download_dir, f"{base_fname}.m4a"),
+            os.path.join(download_dir, f"{base_fname}.mp3"),
+            os.path.join(download_dir, f"{rj_id}.m4a"),
+            os.path.join(download_dir, f"{rj_id}.mp3"),
+        ]
     else:
-        final_output = os.path.join(download_dir, f"{rj_id}{out_ext}")
+        possible_existing = [os.path.join(download_dir, f"{base_fname}.{configured_fmt}")]
+
+    existing_file = next((f for f in possible_existing if os.path.exists(f) and os.path.getsize(f) > 0), None)
+    if existing_file:
+        print(f"{YELLOW}[SKIP] File '{os.path.basename(existing_file)}' sudah ada. Melewati proses download.{RESET}")
+        return
+
+    final_output = os.path.join(download_dir, f"{base_fname}.{configured_fmt if configured_fmt != 'auto' else 'm4a'}")
 
     progress_info = f"[{current_index}/{total_count}] " if total_count > 1 else ""
 
@@ -187,13 +202,8 @@ def process_single_id(rj_id, current_index, total_count):
     print(f" Circle / Maker : {circle}")
     print(f" Genre / Rating : {genre} [{age_rating}]")
     print(f" Folder Simpan  : {download_dir}")
-    print(f" File Output    : {final_output}")
+    print(f" Format Mode    : {configured_fmt.upper() if configured_fmt != 'auto' else 'Otomatis (Fast Remux)'}")
     print(f"{MAGENTA}{'-' * 51}{RESET}\n")
-
-    # Cek jika file sudah ada
-    if os.path.exists(final_output):
-        print(f"{YELLOW}[SKIP] File '{final_output}' sudah ada. Melewati proses download.{RESET}")
-        return
 
     temp_dir = os.path.join(".cache", "temp")
     os.makedirs(temp_dir, exist_ok=True)
@@ -254,6 +264,14 @@ def process_single_id(rj_id, current_index, total_count):
             if not actual_file:
                 raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
             downloaded_track_files.append(actual_file)
+
+        # 3. Tentukan nama dan format file output akhir (Smart Native Container)
+        if configured_fmt == "auto":
+            first_codec = get_audio_codec(downloaded_track_files[0]) if downloaded_track_files else ""
+            out_ext = ".m4a" if first_codec == "aac" else (".mp3" if first_codec == "mp3" else ".m4a")
+            final_output = os.path.join(download_dir, f"{base_fname}{out_ext}")
+        else:
+            final_output = os.path.join(download_dir, f"{base_fname}.{configured_fmt}")
 
         # 3. Merge Tracks & Embed Cover Art + Metadata & Chapters
         if len(downloaded_track_files) > 1:

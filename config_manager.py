@@ -64,7 +64,7 @@ DEFAULT_CONFIG = {
     "notify_popup": True,
     "auto_clipboard": False,
     "ytdlp_channel": "stable",
-    "audio_format": "m4a",
+    "audio_format": "auto",
 }
 
 
@@ -241,15 +241,23 @@ def set_download_dir(new_dir):
 
 
 def get_audio_format():
-    """Mengambil format audio output dari config ('m4a' atau 'mp3'). Default: 'm4a'."""
+    """Mengambil format audio output dari config ('auto', 'm4a', atau 'mp3'). Default: 'auto'."""
     cfg = load_config()
-    fmt = str(cfg.get("audio_format", "m4a")).strip().lower()
+    fmt = str(cfg.get("audio_format", "auto")).strip().lower()
+    if fmt in ("auto", "smart", "default"):
+        return "auto"
     return "m4a" if fmt in ("m4a", "aac") else "mp3"
 
 
 def set_audio_format(fmt):
-    """Menyimpan pilihan format audio ('m4a' atau 'mp3') ke config.json."""
-    clean_fmt = "m4a" if str(fmt).strip().lower() in ("m4a", "aac") else "mp3"
+    """Menyimpan pilihan format audio ('auto', 'm4a', 'mp3') ke config.json."""
+    raw = str(fmt).strip().lower()
+    if raw in ("auto", "smart", "default"):
+        clean_fmt = "auto"
+    elif raw in ("m4a", "aac"):
+        clean_fmt = "m4a"
+    else:
+        clean_fmt = "mp3"
     cfg = load_config()
     cfg["audio_format"] = clean_fmt
     save_config(cfg)
