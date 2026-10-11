@@ -470,6 +470,65 @@ class SettingsDialog(tk.Toplevel):
         )
         chk_name.pack(fill="x", pady=4)
 
+        # Pilihan Format Audio Output
+        lbl_fmt_opt = tk.Label(
+            self.content_container,
+            text="Format Berkas Audio Output:",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_fmt_opt.pack(fill="x", pady=(8, 2))
+
+        fmt_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        fmt_box.pack(fill="x", pady=(0, 6))
+
+        r_auto = tk.Radiobutton(
+            fmt_box,
+            text="Otomatis / Sesuai Sumber (Rekomendasi - Cepat & Asli, MP3 + CUE Sheet)",
+            variable=self.var_audio_format,
+            value="auto",
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#50fa7b",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#50fa7b",
+            anchor="w",
+        )
+        r_auto.pack(fill="x", pady=1)
+
+        r_m4a = tk.Radiobutton(
+            fmt_box,
+            text="M4A (Apple AAC) - Satu Berkas Utuh, Bab Tertanam Tanpa File CUE",
+            variable=self.var_audio_format,
+            value="m4a",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#f8f8f2",
+            anchor="w",
+        )
+        r_m4a.pack(fill="x", pady=1)
+
+        r_mp3 = tk.Radiobutton(
+            fmt_box,
+            text="MP3 (LAME CBR 320k) - Format Klasik Kompatibilitas Penuh",
+            variable=self.var_audio_format,
+            value="mp3",
+            font=("Segoe UI", 9),
+            bg="#1e1e2e",
+            fg="#f8f8f2",
+            selectcolor="#282a36",
+            activebackground="#1e1e2e",
+            activeforeground="#f8f8f2",
+            anchor="w",
+        )
+        r_mp3.pack(fill="x", pady=1)
+
         chk_notify = tk.Checkbutton(
             self.content_container,
             text="Tampilkan Kotak Dialog Notifikasi Pop-up saat Semua Unduhan Selesai",
