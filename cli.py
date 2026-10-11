@@ -122,9 +122,18 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
         "--fragment-retries", "10",
         "--retry-sleep", "3",
         "-N", "16",
-        "--downloader", f"default:{aria2c_bin}",
-        "--downloader", "dash,m3u8:native",
-        "--downloader-args", "aria2c:-s 16 -x 16 -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+    ]
+    if os.path.exists(aria2c_bin):
+        cmd.extend([
+            "--downloader", "aria2c",
+            "--downloader", "dash,m3u8:native",
+            "--downloader-args", "aria2c:-s 16 -x 16 -j 16 -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+        ])
+    else:
+        cmd.extend([
+            "--downloader", "dash,m3u8:native",
+        ])
+    cmd.extend([
         "--fixup", "never",
         "--add-header", f"Referer: {referer}",
         "--add-header", f"Origin: {referer}",
@@ -132,7 +141,7 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
         "--user-agent", USER_AGENT,
         audio_url,
         "-o", output_tmpl,
-    ]
+    ])
 
     max_attempts = 3
     for attempt in range(1, max_attempts + 1):
@@ -140,7 +149,7 @@ def download_audio(audio_url, output_tmpl, referer=REFERER):
             if attempt > 1:
                 print(f"{YELLOW}[i] Mengulang unduhan (Percobaan {attempt}/{max_attempts})...{RESET}")
                 time.sleep(2)
-            subprocess.run(cmd, check=True)
+            subprocess.run(cmd, check=True, env=os.environ.copy())
             return
         except subprocess.CalledProcessError:
             if attempt == max_attempts:

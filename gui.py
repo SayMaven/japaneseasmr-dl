@@ -51,7 +51,7 @@ RE_YTDLP_PROGRESS = re.compile(
     re.IGNORECASE,
 )
 RE_ARIA2_PROGRESS = re.compile(
-    r'\[#\w+\s+([\d\.]+[kMGTP]?i?B)/([\d\.]+[kMGTP]?i?B)\s*\(([\d\.]+)%\).*?DL:([\d\.]+[kMGTP]?i?B).*?ETA:([\w\d]+)\]',
+    r'\[#\w+\s+([\d\.]+[kMGTP]?i?B)/([\d\.]+[kMGTP]?i?B)\s*\(([\d\.]+)%\).*?DL:([\d\.]+[kMGTP]?i?B).*?ETA:([^\s\]]+)\]',
     re.IGNORECASE,
 )
 RE_FRAG_PROGRESS = re.compile(
@@ -2855,9 +2855,18 @@ class JapaneseASMRApp(tk.Tk):
                             "--fragment-retries", "10",
                             "--retry-sleep", "3",
                             "-N", conn_val,
-                            "--downloader", f"default:{aria2c_bin}",
-                            "--downloader", "dash,m3u8:native",
-                            "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+                        ]
+                        if os.path.exists(aria2c_bin):
+                            cmd_ytdlp.extend([
+                                "--downloader", "aria2c",
+                                "--downloader", "dash,m3u8:native",
+                                "--downloader-args", f"aria2c:-s {conn_val} -x {conn_val} -j {conn_val} -k 1M --file-allocation=none --summary-interval=1 --timeout=60 --max-tries=10 --retry-wait=3 --continue=true",
+                            ])
+                        else:
+                            cmd_ytdlp.extend([
+                                "--downloader", "dash,m3u8:native",
+                            ])
+                        cmd_ytdlp.extend([
                             "--fixup", "never",
                             "--add-header", f"Referer: {t_ref}",
                             "--add-header", f"Origin: {t_ref}",
@@ -2865,7 +2874,7 @@ class JapaneseASMRApp(tk.Tk):
                             "--user-agent", USER_AGENT,
                             t_url,
                             "-o", t_out_tmpl,
-                        ]
+                        ])
                         self.current_process = subprocess.Popen(
                             cmd_ytdlp,
                             stdout=subprocess.PIPE,
@@ -2875,6 +2884,7 @@ class JapaneseASMRApp(tk.Tk):
                             universal_newlines=True,
                             encoding="utf-8",
                             errors="replace",
+                            env=os.environ.copy(),
                             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                         )
 
@@ -2945,10 +2955,10 @@ class JapaneseASMRApp(tk.Tk):
                                         )
                                         continue
 
-                                # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative]
+                                # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative], aria2 summary
                                 if line_s.startswith("ERROR:") or line_s.startswith("WARNING:"):
                                     self._log(f"  [!] {line_s}")
-                                elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file"]):
+                                elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file", "***", "===", "---", "FILE:", "Download Results:", "Status Legend:"]):
                                     self._log(f"  {line_s}")
 
                         self.current_process.wait()
