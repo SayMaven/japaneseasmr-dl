@@ -16,6 +16,7 @@ Thumbs.db
 .DS_Store
 
 plan.md
+CHANGELOG_COMMIT_*.md
 .cache/
 config.json
 history.json
