@@ -859,6 +859,100 @@ def write_cue_sheet(output_audio_path, chapters, meta=None):
         return None
 
 
+def parse_cue_file(cue_path):
+    """
+    Membaca dan mem-parsing berkas .cue sheet menjadi daftar bab / tracks.
+    Mengembalikan list of dict: [{'index': 1, 'title': '...', 'start_ms': 0}, ...]
+    """
+    if not os.path.exists(cue_path):
+        return []
+    chapters = []
+    curr = {}
+    content = None
+    for enc in ("utf-8-sig", "utf-8", "cp932", "shift_jis"):
+        try:
+            with open(cue_path, "r", encoding=enc) as f:
+                content = f.read()
+                break
+        except (UnicodeDecodeError, Exception):
+            continue
+
+    if not content:
+        try:
+            with open(cue_path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+        except Exception:
+            return []
+
+    try:
+        for line in content.splitlines():
+            line = line.strip()
+            m_tr = re.match(r"^TRACK\s+(\d+)\s+AUDIO", line, re.I)
+            if m_tr:
+                if curr:
+                    chapters.append(curr)
+                curr = {"index": int(m_tr.group(1)), "title": f"Track {m_tr.group(1)}", "start_ms": 0}
+            m_ti = re.match(r'^TITLE\s+"?(.*?)"?$', line, re.I)
+            if m_ti and curr:
+                curr["title"] = m_ti.group(1).strip('"')
+            m_idx = re.match(r"^INDEX\s+01\s+(\d+):(\d+):(\d+)", line, re.I)
+            if m_idx and curr:
+                mm, ss, ff = int(m_idx.group(1)), int(m_idx.group(2)), int(m_idx.group(3))
+                curr["start_ms"] = (mm * 60 + ss) * 1000 + int((ff / 75.0) * 1000)
+        if curr:
+            chapters.append(curr)
+    except Exception:
+        pass
+    return chapters
+
+
+def extract_chapters_from_audio(file_path):
+    """
+    Mengekstrak daftar bab dari file audio:
+    1. Membaca file pendamping .cue jika tersedia (sangat cepat).
+    2. Jika tidak ada, membaca penanda bab internal (QuickTime chpl atom pada M4A atau ID3v2 CHAP pada MP3) via ffprobe.
+    """
+    if not file_path or not os.path.exists(file_path):
+        return []
+
+    # 1. Cek CUE sheet pendamping terlebih dahulu
+    cue_path = os.path.splitext(file_path)[0] + ".cue"
+    if os.path.exists(cue_path):
+        cue_chapters = parse_cue_file(cue_path)
+        if len(cue_chapters) > 1:
+            return cue_chapters
+
+    # 2. Cek embedded chapters via ffprobe
+    ffprobe = get_bin_executable("ffprobe")
+    try:
+        res = subprocess.run(
+            [ffprobe, "-hide_banner", "-loglevel", "error", "-i", file_path, "-show_chapters"],
+            capture_output=True,
+            creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
+        )
+        out = res.stdout.decode("utf-8", errors="replace")
+        chapters = []
+        curr = {}
+        for line in out.splitlines():
+            line = line.strip()
+            if line == "[CHAPTER]":
+                curr = {"index": len(chapters) + 1, "title": f"Bab {len(chapters) + 1}", "start_ms": 0}
+            elif line == "[/CHAPTER]":
+                if curr:
+                    chapters.append(curr)
+                curr = {}
+            elif line.startswith("start_time="):
+                try:
+                    curr["start_ms"] = int(float(line.split("=")[1]) * 1000)
+                except Exception:
+                    pass
+            elif line.startswith("TAG:title="):
+                curr["title"] = line.split("TAG:title=")[1].strip()
+        return chapters
+    except Exception:
+        return []
+
+
 def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None, meta=None, rj_id=None, log_func=print):
     """
     Menggabungkan multi-track (jika ada), menyematkan cover art HD, metadata lengkap,
