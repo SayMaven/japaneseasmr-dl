@@ -1,14 +1,32 @@
-# JapaneseASMR Downloader & Audio Player
+<div align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="JapaneseASMR Downloader Logo" style="border-radius: 28px;" />
+  <h1>JapaneseASMR Downloader</h1>
+  <p><b>A modern all-in-one desktop application to download, merge, tag, and play Japanese ASMR audio works.</b></p>
 
-<p align="center">
-  <b>Languages:</b>
-  <b>English</b> |
-  <a href="README_ID.md">Bahasa Indonesia</a> |
-  <a href="README_JA.md">日本語</a> |
-  <a href="README_ZH.md">简体中文</a>
-</p>
+  <p>
+    <b>English</b> |
+    <a href="README_ID.md">Bahasa Indonesia</a> |
+    <a href="README_JA.md">日本語</a> |
+    <a href="README_ZH.md">简体中文</a>
+  </p>
 
-A modern all-in-one desktop application to download JapaneseASMR audio, automatically merge multi-tracks & bonus omake, embed HD cover art & official DLsite metadata, support interactive chapter markers & CUE sheets, and enjoy built-in gapless playback with a native Windows Media Foundation player.
+  <p>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/Version-v1.1.1-blue?style=for-the-badge" alt="Version v1.1.1" /></a>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-10b981?style=for-the-badge" alt="GPL v3.0 License" /></a>
+    <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d7?style=for-the-badge" alt="Platform" />
+    <img src="https://img.shields.io/badge/Language-Python%203.10%2B-3776ab?style=for-the-badge" alt="Language" />
+    <img src="https://img.shields.io/badge/UI-Tkinter%20%2F%20ttk-1e293b?style=for-the-badge" alt="Tkinter GUI" />
+  </p>
+
+  <p>
+    <a href="#key-features">Key Features</a> •
+    <a href="#architecture--tech-stack">Tech Stack</a> •
+    <a href="#installation--usage">Download & Install</a> •
+    <a href="#running-from-source-code-developer-mode">Building</a> •
+    <a href="#project-structure">Project Structure</a> •
+    <a href="#license">License</a>
+  </p>
+</div>
 
 ---
 
@@ -46,6 +64,25 @@ A modern all-in-one desktop application to download JapaneseASMR audio, automati
 - **One-Click Cache Cleaning**: Monitor and clear thumbnail caches (`.cache/covers/`) and temporary download chunks (`.cache/temp/`).
 - **Flexible Output Formats**: Choose between Auto (M4A Fast Remux / MP3), M4A Native, or MP3 CBR 320k.
 - **File Naming Options**: Standard RJ code naming or full original work titles.
+
+---
+
+## Architecture & Tech Stack
+
+JapaneseASMR Downloader adheres to a modular, lightweight desktop architecture with native Windows optimization and zero external runtime dependencies when installed:
+
+| Layer | Component | Description |
+| :--- | :--- | :--- |
+| **UI Framework** | Tkinter & `ttk` | Declarative responsive desktop GUI, custom canvas timeline slider, and modern dark theme |
+| **Media Engine** | Windows Media Foundation (`NativeMFPlayer`) | Hardware-accelerated native audio decoding, instant seeking, and interactive chapter sync |
+| **Audio Processing** | FFmpeg & FFprobe | Zero-copy AAC stream remuxing (`.m4a`), ID3v2/MP4 chapter atom injection, and CUE sheet export |
+| **Download Pipeline** | yt-dlp + aria2c | Multi-source fallback (`japaneseasmr` / `asmr.one`) with parallel multi-connection acceleration |
+| **Metadata Scraper** | `urllib` & DLsite Parser | Real-time DLsite metadata extraction (CV, Circle, Tags, HD Cover Art) with regex sanitize filters |
+| **Image Processing** | Pillow (PIL) | Asynchronous cover art loading, thumbnail generation, and multi-resolution icon rendering |
+| **Internationalization (i18n)** | Win32 API (`ctypes`) + JSON Catalog | Live zero-restart UI re-rendering with automatic Windows UI locale detection |
+| **Local Persistence** | JSON Storage (`config.json`, `history.json`) | Persistent user settings, library playback state, cover thumbnails cache, and download history |
+| **Binary Compiler** | Nuitka | Standalone C-level compiled Windows executable with embedded Python runtime and native DLLs |
+| **Installer & Setup** | Inno Setup 7 | High-ratio LZMA2/ultra64 compressed installer with 4-language setup wizard |
 
 ---
 

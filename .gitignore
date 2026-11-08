@@ -32,3 +32,4 @@ nuitka_build.bat
 dist_installer/
 
 installer_setup.iss
+languages/

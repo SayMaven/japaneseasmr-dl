@@ -1,14 +1,32 @@
-# JapaneseASMR Downloader & Audio Player
+<div align="center">
+  <img src="assets/icon.png" width="128" height="128" alt="JapaneseASMR Downloader Logo" style="border-radius: 28px;" />
+  <h1>JapaneseASMR Downloader</h1>
+  <p><b>Japanese ASMR 音声のダウンロード、自動結合、タグ埋め込み、再生を一本化した最新デスクトップアプリ</b></p>
 
-<p align="center">
-  <b>言語 / Languages:</b>
-  <a href="README.md">English</a> |
-  <a href="README_ID.md">Bahasa Indonesia</a> |
-  <b>日本語</b> |
-  <a href="README_ZH.md">简体中文</a>
-</p>
+  <p>
+    <a href="README.md">English</a> |
+    <a href="README_ID.md">Bahasa Indonesia</a> |
+    <b>日本語</b> |
+    <a href="README_ZH.md">简体中文</a>
+  </p>
 
-JapaneseASMR音声を高速ダウンロードし、マルチトラックや特典音声を自動結合、DLsite公式の高解像度カバーと詳細メタデータを埋め込み、チャプター（章）およびCUEシートに対応した、Windows Media Foundation搭載のオールインワンデスクトップアプリケーションです。
+  <p>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/バージョン-v1.1.1-blue?style=for-the-badge" alt="Version v1.1.1" /></a>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/blob/main/LICENSE"><img src="https://img.shields.io/badge/ライセンス-GPL%20v3.0-10b981?style=for-the-badge" alt="GPL v3.0 License" /></a>
+    <img src="https://img.shields.io/badge/プラットフォーム-Windows%2010%2F11-0078d7?style=for-the-badge" alt="Platform" />
+    <img src="https://img.shields.io/badge/開発言語-Python%203.10%2B-3776ab?style=for-the-badge" alt="Language" />
+    <img src="https://img.shields.io/badge/UI-Tkinter%20%2F%20ttk-1e293b?style=for-the-badge" alt="Tkinter GUI" />
+  </p>
+
+  <p>
+    <a href="#主な機能">主な機能</a> •
+    <a href="#アーキテクチャ--使用技術tech-stack">Tech Stack</a> •
+    <a href="#インストールと使い方">インストール</a> •
+    <a href="#ソースコードからの実行開発者向け">開発手順</a> •
+    <a href="#プロジェクト構成">プロジェクト構成</a> •
+    <a href="#ライセンス">ライセンス</a>
+  </p>
+</div>
 
 ---
 
@@ -44,6 +62,25 @@ JapaneseASMR音声を高速ダウンロードし、マルチトラックや特�
 - **保存先フォルダの自由変更**: いつでもダウンロード先ディレクトリを変更可能。
 - **ワンクリックキャッシュ削除**: カバー画像キャッシュ（`.cache/covers/`）やダウンロード中の一時ファイル（`.cache/temp/`）を簡単にクリーンアップ。
 - **ファイル命名設定**: 標準RJ番号形式または元の作品タイトル形式を選択可能。
+
+---
+
+## アーキテクチャ ＆ 使用技術（Tech Stack）
+
+JapaneseASMR Downloader は、軽量かつモジュール化されたデスクトップ設計を採用し、Windows環境に最適化されています（インストーラー版は追加ランタイム不要）：
+
+| レイヤー | コンポーネント | 説明 |
+| :--- | :--- | :--- |
+| **UIフレームワーク** | Tkinter & `ttk` | モダンなダークテーマ対応のレスポンシブデスクトップGUI、カスタムCanvasタイムライン、動的キュー |
+| **メディアエンジン** | Windows Media Foundation (`NativeMFPlayer`) | ハードウェアアクセラレーションによる高速オーディオ再生、瞬時シーク、リアルタイム章（チャプター）同期 |
+| **音声処理** | FFmpeg & FFprobe | AACストリームの無劣化リマックス（`.m4a`）、ID3v2/MP4チャプターアトムの埋め込み、CUEシート生成 |
+| **ダウンロードパイプライン** | yt-dlp + aria2c | 並列マルチスレッド高速ダウンロードとデュアルソースフォールバック（`japaneseasmr` / `asmr.one`） |
+| **メタデータスクレイピング** | `urllib` & DLsite Parser | DLsite公式情報のリアルタイム抽出（CV、サークル、タグ、高解像度カバー）およびファイル名安全化 |
+| **画像処理** | Pillow (PIL) | 非同期カバー画像読み込み、サムネイルキャッシュ生成、マルチ解像度アイコン描画 |
+| **国際化・多言語（i18n）** | Win32 API (`ctypes`) + JSON Catalog | 再起動不要の動的言語切り替えおよびWindowsシステム言語の自動検出 |
+| **ローカルデータ保存** | JSON Storage (`config.json`, `history.json`) | ユーザー設定、再生履歴、カバーサムネイルキャッシュ、ダウンロード履歴の永続化 |
+| **バイナリコンパイル** | Nuitka | PythonランタイムとDLLを内包したC言語レベルの最適化スタンドアロンWindows実行ファイル（.exe） |
+| **インストーラー＆配布** | Inno Setup 7 | 高圧縮LZMA2/ultra64による軽量インストーラー（4言語セットアップウィザード対応） |
 
 ---
 
