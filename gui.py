@@ -37,6 +37,7 @@ from config_manager import (
     write_cue_sheet,
 )
 from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
+from i18n import t, get_active_language, set_active_language, get_available_languages
 
 REFERER = "https://japaneseasmr.com"
 USER_AGENT = (
@@ -196,19 +197,21 @@ class InAppModal:
 
 
 def show_dark_info(parent, title, message):
-    InAppModal.show(parent, title, message, dialog_type="info", confirm_text="OK")
+    InAppModal.show(parent, title, message, dialog_type="info", confirm_text=t("btn_ok"))
 
 
 def show_dark_warning(parent, title, message):
-    InAppModal.show(parent, title, message, dialog_type="warning", confirm_text="Mengerti")
+    InAppModal.show(parent, title, message, dialog_type="warning", confirm_text=t("btn_understand"))
 
 
 def show_dark_error(parent, title, message):
-    InAppModal.show(parent, title, message, dialog_type="error", confirm_text="Tutup")
+    InAppModal.show(parent, title, message, dialog_type="error", confirm_text=t("btn_close"))
 
 
-def ask_dark_yesno(parent, title, message, confirm_text="Ya", cancel_text="Batal"):
-    return InAppModal.show(parent, title, message, dialog_type="question", confirm_text=confirm_text, cancel_text=cancel_text)
+def ask_dark_yesno(parent, title, message, confirm_text=None, cancel_text=None):
+    c_text = confirm_text or t("btn_yes")
+    can_text = cancel_text or t("btn_no")
+    return InAppModal.show(parent, title, message, dialog_type="question", confirm_text=c_text, cancel_text=can_text)
 
 
 class SettingsDialog(tk.Toplevel):
@@ -249,6 +252,7 @@ class SettingsDialog(tk.Toplevel):
         self.cfg = load_config()
 
         # Variable States
+        self.var_language = tk.StringVar(value=self.cfg.get("language", "auto"))
         self.var_download_dir = tk.StringVar(value=self.cfg.get("download_dir", get_download_dir()))
         self.var_detailed_name = tk.BooleanVar(value=self.cfg.get("use_detailed_filename", False))
         self.var_notify_popup = tk.BooleanVar(value=self.cfg.get("notify_popup", True))
@@ -264,13 +268,14 @@ class SettingsDialog(tk.Toplevel):
         self._show_tab("general")
 
     def _build_ui(self):
+        self.title(t("settings_title"))
         # 1. Header Bar Dialog
         header_bar = tk.Frame(self, bg="#282a36", height=45)
         header_bar.pack(fill="x", side="top")
 
         lbl_header = tk.Label(
             header_bar,
-            text="Pengaturan Aplikasi",
+            text=t("settings_header"),
             font=("Segoe UI", 12, "bold"),
             bg="#282a36",
             fg="#f8f8f2",
@@ -290,7 +295,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_menu = tk.Label(
             self.sidebar,
-            text="KATEGORI",
+            text=t("lbl_category"),
             font=("Segoe UI", 8, "bold"),
             bg="#181825",
             fg="#6272a4",
@@ -302,10 +307,10 @@ class SettingsDialog(tk.Toplevel):
 
         # Tab Navigation Items
         tabs = [
-            ("general", "Umum"),
-            ("download", "Unduhan & Jaringan"),
-            ("cache", "Penyimpanan & Cache"),
-            ("about", "Tentang Aplikasi"),
+            ("general", t("tab_settings_general")),
+            ("download", t("tab_settings_download")),
+            ("cache", t("tab_settings_cache")),
+            ("about", t("tab_settings_about")),
         ]
 
         for tab_id, label_text in tabs:
@@ -337,7 +342,7 @@ class SettingsDialog(tk.Toplevel):
 
         btn_save = tk.Button(
             footer_bar,
-            text="Simpan Pengaturan",
+            text=t("btn_save_settings"),
             font=("Segoe UI", 9, "bold"),
             bg="#50fa7b",
             fg="#1e1e2e",
@@ -352,7 +357,7 @@ class SettingsDialog(tk.Toplevel):
 
         btn_cancel = tk.Button(
             footer_bar,
-            text="Batal",
+            text=t("btn_cancel"),
             font=("Segoe UI", 9),
             bg="#44475a",
             fg="#f8f8f2",
@@ -392,7 +397,7 @@ class SettingsDialog(tk.Toplevel):
     def _render_general_tab(self):
         lbl_title = tk.Label(
             self.content_container,
-            text="Pengaturan Umum",
+            text=t("lbl_settings_general_title"),
             font=("Segoe UI", 12, "bold"),
             bg="#1e1e2e",
             fg="#f8f8f2",
@@ -400,10 +405,60 @@ class SettingsDialog(tk.Toplevel):
         )
         lbl_title.pack(fill="x", pady=(0, 14))
 
+        # Pilihan Bahasa (Language)
+        lbl_lang = tk.Label(
+            self.content_container,
+            text=t("lbl_language"),
+            font=("Segoe UI", 9, "bold"),
+            bg="#1e1e2e",
+            fg="#cdd6f4",
+            anchor="w",
+        )
+        lbl_lang.pack(fill="x", pady=(2, 2))
+
+        lbl_lang_desc = tk.Label(
+            self.content_container,
+            text=t("lbl_language_desc"),
+            font=("Segoe UI", 8),
+            bg="#1e1e2e",
+            fg="#6272a4",
+            anchor="w",
+        )
+        lbl_lang_desc.pack(fill="x", pady=(0, 6))
+
+        lang_box = tk.Frame(self.content_container, bg="#1e1e2e")
+        lang_box.pack(fill="x", pady=(0, 12))
+
+        lang_options = get_available_languages()
+        disp_map = {code: disp for code, disp in lang_options}
+        code_map = {disp: code for code, disp in lang_options}
+
+        cur_code = self.var_language.get()
+        cur_disp = disp_map.get(cur_code, lang_options[0][1])
+
+        self.cbo_lang = ttk.Combobox(
+            lang_box,
+            values=[disp for _, disp in lang_options],
+            state="readonly",
+            font=("Segoe UI", 9),
+            width=32,
+        )
+        self.cbo_lang.set(cur_disp)
+        self.cbo_lang.pack(side="left")
+
+        def _on_lang_changed(e):
+            sel_disp = self.cbo_lang.get()
+            self.var_language.set(code_map.get(sel_disp, "auto"))
+
+        self.cbo_lang.bind("<<ComboboxSelected>>", _on_lang_changed)
+
+        sep0 = tk.Frame(self.content_container, bg="#313244", height=1)
+        sep0.pack(fill="x", pady=10)
+
         # Folder Simpan
         lbl_dir = tk.Label(
             self.content_container,
-            text="Lokasi Folder Penyimpanan Download:",
+            text=t("lbl_download_dir"),
             font=("Segoe UI", 9, "bold"),
             bg="#1e1e2e",
             fg="#cdd6f4",
@@ -915,7 +970,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_version = tk.Label(
             title_box,
-            text="Versi 1.1.0 (Release Build) • Windows Edition",
+            text=t("app_version"),
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#bd93f9",
@@ -925,7 +980,7 @@ class SettingsDialog(tk.Toplevel):
 
         lbl_desc = tk.Label(
             card_about,
-            text="Aplikasi desktop all-in-one untuk mengunduh audio ASMR (dengan engine dual-source), filter track pintar, penyematan cover art HD & metadata DLsite lengkap, serta pemutar audio bawaan.",
+            text=t("lbl_about_desc"),
             font=("Segoe UI", 9),
             bg="#1e1e2e",
             fg="#cdd6f4",
@@ -981,9 +1036,11 @@ class SettingsDialog(tk.Toplevel):
     def _save_settings(self):
         new_dir = self.var_download_dir.get().strip()
         if not new_dir:
-            show_dark_warning(self, "Peringatan", "Lokasi folder download tidak boleh kosong.")
+            show_dark_warning(self, t("msg_error_title"), "Lokasi folder download tidak boleh kosong.")
             return
 
+        lang_val = self.var_language.get()
+        self.cfg["language"] = lang_val
         self.cfg["download_dir"] = new_dir
         self.cfg["use_detailed_filename"] = self.var_detailed_name.get()
         self.cfg["notify_popup"] = self.var_notify_popup.get()
@@ -993,6 +1050,7 @@ class SettingsDialog(tk.Toplevel):
         self.cfg["audio_format"] = self.var_audio_format.get()
 
         save_config(self.cfg)
+        set_active_language(lang_val)
         set_download_dir(new_dir)
         set_audio_format(self.var_audio_format.get())
 
@@ -1001,11 +1059,15 @@ class SettingsDialog(tk.Toplevel):
         if hasattr(self.parent, "var_auto_clipboard"):
             self.parent.var_auto_clipboard.set(self.cfg["auto_clipboard"])
         self.parent.config = dict(self.cfg)
-        self.parent.lbl_current_dir.config(text=f"Lokasi Simpan: {os.path.abspath(new_dir)}")
+        self.parent.lbl_current_dir.config(text=t("lbl_save_location", path=os.path.abspath(new_dir)))
         if hasattr(self.parent, "_refresh_playlist_view"):
             self.parent._refresh_playlist_view()
 
-        show_dark_info(self, "Tersimpan", "Semua pengaturan berhasil disimpan dan diterapkan!")
+        # Dynamic In-Place UI Re-render seketika!
+        if hasattr(self.parent, "retranslate_ui"):
+            self.parent.retranslate_ui()
+
+        show_dark_info(self, t("msg_info_title"), t("msg_settings_saved"))
         self._on_dialog_close()
 
     def _on_dialog_close(self):
@@ -1195,6 +1257,7 @@ class JapaneseASMRApp(tk.Tk):
 
         self._init_styles()
         self._build_ui()
+        self.retranslate_ui()
         self._load_history_view()
         self._refresh_playlist_view()
 
@@ -1344,20 +1407,20 @@ class JapaneseASMRApp(tk.Tk):
         header_frame = tk.Frame(self, bg="#282a36", height=65)
         header_frame.pack(fill="x", side="top")
 
-        title_label = tk.Label(
+        self.title_label = tk.Label(
             header_frame,
             text="JapaneseASMR Downloader",
             font=("Segoe UI", 15, "bold"),
             bg="#282a36",
             fg="#50fa7b",
         )
-        title_label.pack(side="left", padx=20, pady=12)
+        self.title_label.pack(side="left", padx=20, pady=12)
 
         # Directory Selector, Open Folder, & Settings Buttons
         dir_controls = tk.Frame(header_frame, bg="#282a36")
         dir_controls.pack(side="right", padx=20, pady=10)
 
-        change_dir_btn = tk.Button(
+        self.btn_change_dir = tk.Button(
             dir_controls,
             text="Ganti Folder",
             font=("Segoe UI", 9, "bold"),
@@ -1370,9 +1433,9 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._change_download_dir,
         )
-        change_dir_btn.pack(side="left", padx=(0, 8))
+        self.btn_change_dir.pack(side="left", padx=(0, 8))
 
-        open_folder_btn = tk.Button(
+        self.btn_open_folder = tk.Button(
             dir_controls,
             text="Buka Folder",
             font=("Segoe UI", 9, "bold"),
@@ -1386,9 +1449,9 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._open_downloads_folder,
         )
-        open_folder_btn.pack(side="left", padx=(0, 8))
+        self.btn_open_folder.pack(side="left", padx=(0, 8))
 
-        settings_btn = tk.Button(
+        self.btn_settings = tk.Button(
             dir_controls,
             text="Pengaturan",
             font=("Segoe UI", 9, "bold"),
@@ -1402,7 +1465,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._open_settings_dialog,
         )
-        settings_btn.pack(side="left")
+        self.btn_settings.pack(side="left")
 
         # Bar status folder simpan
         dir_bar = tk.Frame(self, bg="#181825", height=26)
@@ -1446,6 +1509,103 @@ class JapaneseASMRApp(tk.Tk):
         elif selected_tab == str(self.tab_player):
             self._refresh_playlist_view()
 
+    def retranslate_ui(self):
+        """Menerapkan terjemahan bahasa aktif ke seluruh elemen GUI seketika (in-place)."""
+        # 1. Main Window Title
+        self.title(f"{t('app_title')} - v1.1.1")
+
+        # 2. Header
+        if hasattr(self, "title_label"):
+            self.title_label.config(text=t("app_title"))
+        if hasattr(self, "btn_change_dir"):
+            self.btn_change_dir.config(text=t("btn_change_dir"))
+        if hasattr(self, "btn_open_folder"):
+            self.btn_open_folder.config(text=t("btn_open_folder"))
+        if hasattr(self, "btn_settings"):
+            self.btn_settings.config(text=t("btn_settings"))
+        if hasattr(self, "lbl_current_dir"):
+            cur_dir = os.path.abspath(get_download_dir())
+            self.lbl_current_dir.config(text=t("lbl_save_location", path=cur_dir))
+
+        # 3. Notebook Tabs
+        if hasattr(self, "notebook") and hasattr(self, "tab_queue"):
+            self.notebook.tab(self.tab_queue, text=f" 📥 {t('tab_queue')} ")
+            self.notebook.tab(self.tab_history, text=f" 📜 {t('tab_history')} ")
+            self.notebook.tab(self.tab_player, text=f" 🎵 {t('tab_player')} ")
+
+        # 4. Tab 1: Queue
+        if hasattr(self, "input_frame"):
+            self.input_frame.config(text=f" {t('lbl_input_group')} ")
+        if hasattr(self, "paste_btn"):
+            self.paste_btn.config(text=t("btn_paste"))
+        if hasattr(self, "add_btn"):
+            self.add_btn.config(text=t("btn_add_queue"))
+        if hasattr(self, "chk_name"):
+            self.chk_name.config(text=t("chk_detailed_name"))
+        if hasattr(self, "queue_frame"):
+            self.queue_frame.config(text=f" {t('tab_queue')} ")
+        if hasattr(self, "tree"):
+            self.tree.heading("no", text="#")
+            self.tree.heading("rjid", text=t("col_rjid"))
+            self.tree.heading("title", text=t("col_title"))
+            self.tree.heading("status", text=t("col_status"))
+        if hasattr(self, "start_btn") and not self.is_downloading:
+            self.start_btn.config(text=t("btn_start_download"))
+        if hasattr(self, "stop_btn"):
+            self.stop_btn.config(text=t("btn_stop_download"))
+        if hasattr(self, "clear_btn"):
+            self.clear_btn.config(text=t("btn_clear_queue"))
+        if hasattr(self, "lbl_progress_status") and not self.is_downloading:
+            self.lbl_progress_status.config(text=f"{t('col_status')}: {t('status_ready')}")
+        if hasattr(self, "log_frame"):
+            self.log_frame.config(text=f" {t('lbl_log_header')} ")
+        if hasattr(self, "right_panel"):
+            self.right_panel.config(text=f" {t('lbl_preview_title')} ")
+
+        # 5. Tab 2: History
+        if hasattr(self, "lbl_h_header"):
+            self.lbl_h_header.config(text=t("tab_history"))
+        if hasattr(self, "refresh_hist_btn"):
+            self.refresh_hist_btn.config(text=t("btn_refresh_playlist"))
+        if hasattr(self, "hist_tree"):
+            self.hist_tree.heading("date", text=t("col_hist_date"))
+            self.hist_tree.heading("rjid", text=t("col_hist_rjid"))
+            self.hist_tree.heading("title", text=t("col_hist_title"))
+            self.hist_tree.heading("size", text=t("col_play_duration"))
+        if hasattr(self, "right_h_panel"):
+            self.right_h_panel.config(text=f" {t('lbl_preview_title')} ")
+        if hasattr(self, "btn_play_file"):
+            self.btn_play_file.config(text=t("btn_play_selected"))
+        if hasattr(self, "btn_del_history"):
+            self.btn_del_history.config(text=t("btn_clear_history"))
+
+        # 6. Tab 3: Player
+        if hasattr(self, "lbl_p_title"):
+            self.lbl_p_title.config(text=t("lbl_playlist"))
+        if hasattr(self, "refresh_p_btn"):
+            self.refresh_p_btn.config(text=t("btn_refresh_playlist"))
+        if hasattr(self, "player_tree"):
+            self.player_tree.heading("rjid", text=t("col_rjid"))
+            self.player_tree.heading("title", text=t("col_play_title"))
+            self.player_tree.heading("cv", text=t("col_hist_cv"))
+            self.player_tree.heading("size", text=t("col_play_duration"))
+        if hasattr(self, "right_p_panel"):
+            self.right_p_panel.config(text=f" {t('lbl_playlist')} ")
+        if hasattr(self, "btn_play_pause") and not self.is_playing:
+            self.btn_play_pause.config(text=f"▶ {t('btn_play')}")
+        if hasattr(self, "lbl_vol_icon"):
+            self.lbl_vol_icon.config(text="Volume:")
+        if hasattr(self, "chap_frame"):
+            self.chap_frame.config(text=f" 📑 {t('lbl_chapters')} ")
+        if hasattr(self, "chap_tree"):
+            self.chap_tree.heading("time", text=t("col_chap_time"))
+            self.chap_tree.heading("title", text=t("col_chap_title"))
+
+        # 7. Metadata detail rows
+        for lbl, key in getattr(self, "_info_rows", []):
+            if key:
+                lbl.config(text=f"{t(key)}")
+
     def _build_queue_tab(self):
         container = self.tab_queue
 
@@ -1457,7 +1617,7 @@ class JapaneseASMRApp(tk.Tk):
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, 10), pady=10)
 
         # 1. Baris Input & Tombol Tambah
-        input_frame = tk.LabelFrame(
+        self.input_frame = tk.LabelFrame(
             left_panel,
             text=" Input Kode RJ / URL ",
             font=("Segoe UI", 10, "bold"),
@@ -1466,9 +1626,9 @@ class JapaneseASMRApp(tk.Tk):
             bd=1,
             relief="solid",
         )
-        input_frame.pack(fill="x", pady=(0, 10), ipady=5)
+        self.input_frame.pack(fill="x", pady=(0, 10), ipady=5)
 
-        input_inner = tk.Frame(input_frame, bg="#1e1e2e")
+        input_inner = tk.Frame(self.input_frame, bg="#1e1e2e")
         input_inner.pack(fill="x", padx=10, pady=(6, 4))
 
         self.id_entry = tk.Entry(
@@ -1497,7 +1657,7 @@ class JapaneseASMRApp(tk.Tk):
         self.id_entry.bind("<FocusOut>", _on_entry_focus_out)
         self.id_entry.bind("<Return>", lambda e: self._add_to_queue())
 
-        paste_btn = tk.Button(
+        self.paste_btn = tk.Button(
             input_inner,
             text="Tempel",
             font=("Segoe UI", 9, "bold"),
@@ -1511,9 +1671,9 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._paste_from_clipboard,
         )
-        paste_btn.pack(side="left", padx=(0, 8))
+        self.paste_btn.pack(side="left", padx=(0, 8))
 
-        add_btn = tk.Button(
+        self.add_btn = tk.Button(
             input_inner,
             text="Tambah ke Antrean",
             font=("Segoe UI", 9, "bold"),
@@ -1526,13 +1686,13 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._add_to_queue,
         )
-        add_btn.pack(side="right")
+        self.add_btn.pack(side="right")
 
         # Opsi Checkbox Nama File (Diletakkan rapi di bawah baris input)
-        opts_frame = tk.Frame(input_frame, bg="#1e1e2e")
+        opts_frame = tk.Frame(self.input_frame, bg="#1e1e2e")
         opts_frame.pack(fill="x", padx=10, pady=(2, 4))
 
-        chk_name = tk.Checkbutton(
+        self.chk_name = tk.Checkbutton(
             opts_frame,
             text="Gunakan Judul Asli Karya sebagai Nama File MP3",
             variable=self.opt_detailed_name,
@@ -1545,10 +1705,10 @@ class JapaneseASMRApp(tk.Tk):
             font=("Segoe UI", 9),
             bd=0,
         )
-        chk_name.pack(side="left")
+        self.chk_name.pack(side="left")
 
         # 2. Tabel Antrean
-        queue_frame = tk.LabelFrame(
+        self.queue_frame = tk.LabelFrame(
             left_panel,
             text=" Daftar Antrean Download ",
             font=("Segoe UI", 10, "bold"),
@@ -1557,10 +1717,10 @@ class JapaneseASMRApp(tk.Tk):
             bd=1,
             relief="solid",
         )
-        queue_frame.pack(fill="both", expand=True, pady=(0, 10))
+        self.queue_frame.pack(fill="both", expand=True, pady=(0, 10))
 
         cols = ("no", "rjid", "title", "status")
-        self.tree = ttk.Treeview(queue_frame, columns=cols, show="headings", selectmode="browse")
+        self.tree = ttk.Treeview(self.queue_frame, columns=cols, show="headings", selectmode="browse")
         self.tree.heading("no", text="#", anchor="center")
         self.tree.heading("rjid", text="Kode RJ", anchor="center")
         self.tree.heading("title", text="Judul / Keterangan", anchor="w")
@@ -1571,7 +1731,7 @@ class JapaneseASMRApp(tk.Tk):
         self.tree.column("title", width=260, anchor="w")
         self.tree.column("status", width=110, anchor="center")
 
-        tree_scroll = ttk.Scrollbar(queue_frame, orient="vertical", command=self.tree.yview)
+        tree_scroll = ttk.Scrollbar(self.queue_frame, orient="vertical", command=self.tree.yview)
         self.tree.configure(yscrollcommand=tree_scroll.set)
 
         self.tree.pack(side="left", fill="both", expand=True, padx=(5, 0), pady=5)
@@ -1613,7 +1773,7 @@ class JapaneseASMRApp(tk.Tk):
         )
         self.stop_btn.pack(side="left", padx=(0, 10))
 
-        clear_btn = tk.Button(
+        self.clear_btn = tk.Button(
             btn_action_frame,
             text="Bersihkan Antrean",
             font=("Segoe UI", 9),
@@ -1626,7 +1786,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._clear_queue,
         )
-        clear_btn.pack(side="right")
+        self.clear_btn.pack(side="right")
 
         # Progress Bar Container (Di antara Tombol Aksi dan Log Konsol)
         progress_container = tk.Frame(left_panel, bg="#1e1e2e")
@@ -1694,7 +1854,7 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_progress_size.pack(side="right")
 
         # Log Console
-        log_frame = tk.LabelFrame(
+        self.log_frame = tk.LabelFrame(
             left_panel,
             text=" Status & Log Konsol ",
             font=("Segoe UI", 9, "bold"),
@@ -1703,10 +1863,10 @@ class JapaneseASMRApp(tk.Tk):
             bd=1,
             relief="solid",
         )
-        log_frame.pack(fill="x", pady=(0, 5))
+        self.log_frame.pack(fill="x", pady=(0, 5))
 
         self.log_text = tk.Text(
-            log_frame,
+            self.log_frame,
             height=5,
             bg="#181825",
             fg="#a6adc8",
@@ -1717,7 +1877,7 @@ class JapaneseASMRApp(tk.Tk):
         self.log_text.pack(fill="both", expand=True, padx=5, pady=5)
 
         # Panel Kanan: Preview Thumbnail & Info Card
-        right_panel = tk.LabelFrame(
+        self.right_panel = tk.LabelFrame(
             main_container,
             text=" Informasi Karya & Preview ",
             font=("Segoe UI", 10, "bold"),
@@ -1727,12 +1887,12 @@ class JapaneseASMRApp(tk.Tk):
             relief="solid",
             width=330,
         )
-        right_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
-        right_panel.pack_propagate(False)
+        self.right_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
+        self.right_panel.pack_propagate(False)
 
         # Canvas Cover
         self.cover_canvas = tk.Canvas(
-            right_panel,
+            self.right_panel,
             bg="#282a36",
             width=290,
             height=195,
@@ -1746,15 +1906,15 @@ class JapaneseASMRApp(tk.Tk):
         )
 
         # Info Labels
-        info_inner = tk.Frame(right_panel, bg="#1e1e2e")
+        info_inner = tk.Frame(self.right_panel, bg="#1e1e2e")
         info_inner.pack(fill="both", expand=True, padx=12, pady=3)
 
-        self.lbl_q_id = self._create_info_row(info_inner, "Kode RJ", "-")
-        self.lbl_q_title = self._create_info_row(info_inner, "Judul", "-")
-        self.lbl_q_cv = self._create_info_row(info_inner, "CV / Seiyuu", "-")
-        self.lbl_q_circle = self._create_info_row(info_inner, "Circle / Maker", "-")
-        self.lbl_q_rating = self._create_info_row(info_inner, "Rating Usia", "-")
-        self.lbl_q_genre = self._create_info_row(info_inner, "Genre / Tag", "-")
+        self.lbl_q_id = self._create_info_row(info_inner, "Kode RJ", "-", "lbl_detail_rjid")
+        self.lbl_q_title = self._create_info_row(info_inner, "Judul", "-", "lbl_detail_title")
+        self.lbl_q_cv = self._create_info_row(info_inner, "CV / Seiyuu", "-", "lbl_detail_cv")
+        self.lbl_q_circle = self._create_info_row(info_inner, "Circle / Maker", "-", "lbl_detail_circle")
+        self.lbl_q_rating = self._create_info_row(info_inner, "Rating Usia", "-", "lbl_detail_age")
+        self.lbl_q_genre = self._create_info_row(info_inner, "Genre / Tag", "-", "lbl_detail_genre")
 
     def _build_history_tab(self):
         container = self.tab_history
@@ -1767,16 +1927,16 @@ class JapaneseASMRApp(tk.Tk):
         h_header = tk.Frame(left_h_panel, bg="#1e1e2e")
         h_header.pack(fill="x", pady=(0, 6))
 
-        lbl_h_header = tk.Label(
+        self.lbl_h_header = tk.Label(
             h_header,
             text="Riwayat Karya Terunduh",
             font=("Segoe UI", 11, "bold"),
             bg="#1e1e2e",
             fg="#50fa7b",
         )
-        lbl_h_header.pack(side="left")
+        self.lbl_h_header.pack(side="left")
 
-        refresh_btn = tk.Button(
+        self.refresh_hist_btn = tk.Button(
             h_header,
             text="Segarkan",
             font=("Segoe UI", 9),
@@ -1788,7 +1948,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._load_history_view,
         )
-        refresh_btn.pack(side="right")
+        self.refresh_hist_btn.pack(side="right")
 
         # Banner Statistik Penyimpanan
         stats_frame = tk.Frame(left_h_panel, bg="#282a36", bd=1, relief="solid")
@@ -1827,7 +1987,7 @@ class JapaneseASMRApp(tk.Tk):
         self.hist_tree.bind("<<TreeviewSelect>>", self._on_history_select)
 
         # Panel Kanan Riwayat (Detail & Cover)
-        right_h_panel = tk.LabelFrame(
+        self.right_h_panel = tk.LabelFrame(
             container,
             text=" Detail Riwayat Koleksi ",
             font=("Segoe UI", 10, "bold"),
@@ -1837,11 +1997,11 @@ class JapaneseASMRApp(tk.Tk):
             relief="solid",
             width=330,
         )
-        right_h_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
-        right_h_panel.pack_propagate(False)
+        self.right_h_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
+        self.right_h_panel.pack_propagate(False)
 
         # Tombol Buka File di Riwayat
-        h_actions = tk.Frame(right_h_panel, bg="#1e1e2e")
+        h_actions = tk.Frame(self.right_h_panel, bg="#1e1e2e")
         h_actions.pack(fill="x", padx=12, pady=10, side="bottom")
 
         self.btn_play_file = tk.Button(
@@ -1876,7 +2036,7 @@ class JapaneseASMRApp(tk.Tk):
 
         # Canvas Cover
         self.hist_canvas = tk.Canvas(
-            right_h_panel,
+            self.right_h_panel,
             bg="#282a36",
             width=290,
             height=195,
@@ -1887,16 +2047,16 @@ class JapaneseASMRApp(tk.Tk):
         self.hist_canvas.pack(pady=8, padx=10)
         self.hist_canvas.create_text(145, 97, text="Pilih item riwayat", fill="#6272a4", font=("Segoe UI", 10))
 
-        h_info_inner = tk.Frame(right_h_panel, bg="#1e1e2e")
+        h_info_inner = tk.Frame(self.right_h_panel, bg="#1e1e2e")
         h_info_inner.pack(fill="both", expand=True, padx=12, pady=3)
 
-        self.lbl_h_id = self._create_info_row(h_info_inner, "Kode RJ", "-")
-        self.lbl_h_title = self._create_info_row(h_info_inner, "Judul", "-")
-        self.lbl_h_cv = self._create_info_row(h_info_inner, "CV / Seiyuu", "-")
-        self.lbl_h_circle = self._create_info_row(h_info_inner, "Circle / Maker", "-")
-        self.lbl_h_rating = self._create_info_row(h_info_inner, "Rating Usia", "-")
-        self.lbl_h_genre = self._create_info_row(h_info_inner, "Genre / Tag", "-")
-        self.lbl_h_path = self._create_info_row(h_info_inner, "Status File", "-")
+        self.lbl_h_id = self._create_info_row(h_info_inner, "Kode RJ", "-", "lbl_detail_rjid")
+        self.lbl_h_title = self._create_info_row(h_info_inner, "Judul", "-", "lbl_detail_title")
+        self.lbl_h_cv = self._create_info_row(h_info_inner, "CV / Seiyuu", "-", "lbl_detail_cv")
+        self.lbl_h_circle = self._create_info_row(h_info_inner, "Circle / Maker", "-", "lbl_detail_circle")
+        self.lbl_h_rating = self._create_info_row(h_info_inner, "Rating Usia", "-", "lbl_detail_age")
+        self.lbl_h_genre = self._create_info_row(h_info_inner, "Genre / Tag", "-", "lbl_detail_genre")
+        self.lbl_h_path = self._create_info_row(h_info_inner, "Status File", "-", "col_status")
 
     def _build_player_tab(self):
         container = self.tab_player
@@ -1917,7 +2077,7 @@ class JapaneseASMRApp(tk.Tk):
         )
         self.lbl_p_title.pack(side="left")
 
-        refresh_p_btn = tk.Button(
+        self.refresh_p_btn = tk.Button(
             p_header,
             text="Segarkan",
             font=("Segoe UI", 9),
@@ -1929,7 +2089,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._refresh_playlist_view,
         )
-        refresh_p_btn.pack(side="right")
+        self.refresh_p_btn.pack(side="right")
 
         # Treeview Playlist
         cols = ("rjid", "title", "cv", "size")
@@ -1953,7 +2113,7 @@ class JapaneseASMRApp(tk.Tk):
         self.player_tree.bind("<<TreeviewSelect>>", self._on_playlist_select)
 
         # 2. Panel Kanan: Now Playing Screen & Controls
-        right_p_panel = tk.LabelFrame(
+        self.right_p_panel = tk.LabelFrame(
             container,
             text=" Sedang Diputar (Now Playing) ",
             font=("Segoe UI", 10, "bold"),
@@ -1963,12 +2123,12 @@ class JapaneseASMRApp(tk.Tk):
             relief="solid",
             width=380,
         )
-        right_p_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
-        right_p_panel.pack_propagate(False)
+        self.right_p_panel.pack(side="right", fill="both", padx=(5, 0), pady=10)
+        self.right_p_panel.pack_propagate(False)
 
         # Cover Canvas
         self.player_canvas = tk.Canvas(
-            right_p_panel,
+            self.right_p_panel,
             bg="#282a36",
             width=290,
             height=165,
@@ -1983,7 +2143,7 @@ class JapaneseASMRApp(tk.Tk):
 
         # Meta Info
         self.lbl_p_now_title = tk.Label(
-            right_p_panel,
+            self.right_p_panel,
             text="Belum Ada Audio Diputar",
             font=("Segoe UI", 10, "bold"),
             bg="#1e1e2e",
@@ -1994,7 +2154,7 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_p_now_title.pack(fill="x", padx=10, pady=(0, 2))
 
         self.lbl_p_now_sub = tk.Label(
-            right_p_panel,
+            self.right_p_panel,
             text="CV: - | Circle: -",
             font=("Segoe UI", 8),
             bg="#1e1e2e",
@@ -2005,7 +2165,7 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_p_now_sub.pack(fill="x", padx=10, pady=(0, 4))
 
         # Timeline Slider & Duration Labels
-        timeline_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        timeline_frame = tk.Frame(self.right_p_panel, bg="#1e1e2e")
         timeline_frame.pack(fill="x", padx=12, pady=(0, 2))
 
         self.lbl_time_cur = tk.Label(timeline_frame, text="00:00", font=("Consolas", 9), bg="#1e1e2e", fg="#50fa7b")
@@ -2015,7 +2175,7 @@ class JapaneseASMRApp(tk.Tk):
         self.lbl_time_total.pack(side="right")
 
         self.timeline_slider = ttk.Scale(
-            right_p_panel,
+            self.right_p_panel,
             from_=0,
             to=100,
             orient="horizontal",
@@ -2026,10 +2186,10 @@ class JapaneseASMRApp(tk.Tk):
         self.timeline_slider.bind("<ButtonRelease-1>", self._on_slider_release)
 
         # Control Buttons Row
-        ctrl_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        ctrl_frame = tk.Frame(self.right_p_panel, bg="#1e1e2e")
         ctrl_frame.pack(pady=(0, 4))
 
-        btn_prev = tk.Button(
+        self.btn_prev = tk.Button(
             ctrl_frame,
             text="⏮",
             font=("Segoe UI", 11, "bold"),
@@ -2042,7 +2202,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._player_prev_track,
         )
-        btn_prev.pack(side="left", padx=3)
+        self.btn_prev.pack(side="left", padx=3)
 
         self.btn_play_pause = tk.Button(
             ctrl_frame,
@@ -2059,7 +2219,7 @@ class JapaneseASMRApp(tk.Tk):
         )
         self.btn_play_pause.pack(side="left", padx=3)
 
-        btn_stop = tk.Button(
+        self.btn_stop = tk.Button(
             ctrl_frame,
             text="■",
             font=("Segoe UI", 11, "bold"),
@@ -2072,9 +2232,9 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._player_stop,
         )
-        btn_stop.pack(side="left", padx=3)
+        self.btn_stop.pack(side="left", padx=3)
 
-        btn_next = tk.Button(
+        self.btn_next = tk.Button(
             ctrl_frame,
             text="⏭",
             font=("Segoe UI", 11, "bold"),
@@ -2087,7 +2247,7 @@ class JapaneseASMRApp(tk.Tk):
             cursor="hand2",
             command=self._player_next_track,
         )
-        btn_next.pack(side="left", padx=3)
+        self.btn_next.pack(side="left", padx=3)
 
         self.btn_loop = tk.Button(
             ctrl_frame,
@@ -2105,11 +2265,11 @@ class JapaneseASMRApp(tk.Tk):
         self.btn_loop.pack(side="left", padx=3)
 
         # Volume Slider
-        vol_frame = tk.Frame(right_p_panel, bg="#1e1e2e")
+        vol_frame = tk.Frame(self.right_p_panel, bg="#1e1e2e")
         vol_frame.pack(fill="x", padx=15, pady=(2, 4))
 
-        lbl_vol_icon = tk.Label(vol_frame, text="Volume:", font=("Segoe UI", 8, "bold"), bg="#1e1e2e", fg="#bd93f9")
-        lbl_vol_icon.pack(side="left", padx=(0, 6))
+        self.lbl_vol_icon = tk.Label(vol_frame, text="Volume:", font=("Segoe UI", 8, "bold"), bg="#1e1e2e", fg="#bd93f9")
+        self.lbl_vol_icon.pack(side="left", padx=(0, 6))
 
         self.lbl_vol_val = tk.Label(vol_frame, text="80%", font=("Segoe UI", 8), bg="#1e1e2e", fg="#a6adc8", width=4)
         self.lbl_vol_val.pack(side="right")
@@ -2126,7 +2286,7 @@ class JapaneseASMRApp(tk.Tk):
 
         # 6. Kotak Daftar Bab / Tracklist (Scrollable)
         self.chap_frame = tk.LabelFrame(
-            right_p_panel,
+            self.right_p_panel,
             text=" 📑 Daftar Bab / Tracklist ",
             font=("Segoe UI", 9, "bold"),
             bg="#1e1e2e",
@@ -2164,7 +2324,7 @@ class JapaneseASMRApp(tk.Tk):
         self.chap_tree.bind("<Double-1>", self._on_chapter_double_click)
         self.chap_tree.bind("<Return>", self._on_chapter_double_click)
 
-    def _create_info_row(self, parent, label_text, default_value):
+    def _create_info_row(self, parent, label_text, default_value, key=None):
         frame = tk.Frame(parent, bg="#1e1e2e")
         frame.pack(fill="x", pady=2)
 
@@ -2189,6 +2349,10 @@ class JapaneseASMRApp(tk.Tk):
             justify="left",
         )
         val_lbl.pack(fill="x")
+        if not hasattr(self, "_info_rows"):
+            self._info_rows = []
+        if key:
+            self._info_rows.append((lbl, key))
         return val_lbl
 
     def _save_options(self):
@@ -3476,6 +3640,7 @@ class JapaneseASMRApp(tk.Tk):
             if m_rj and norm_path not in sync_set:
                 sync_set.add(norm_path)
                 rj_cand = m_rj.group(1).upper()
+
                 def _bg_sync_chapters(target_file, rj):
                     try:
                         j_ch = fetch_japaneseasmr_chapters(rj)
@@ -3508,6 +3673,7 @@ class JapaneseASMRApp(tk.Tk):
                             self.after(0, lambda: self._load_track_chapters(target_file))
                     except Exception:
                         pass
+
                 threading.Thread(target=_bg_sync_chapters, args=(norm_path, rj_cand), daemon=True).start()
 
     def _on_chapter_double_click(self, event=None):

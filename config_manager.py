@@ -67,6 +67,7 @@ DEFAULT_CONFIG = {
     "auto_clipboard": True,
     "ytdlp_channel": "stable",
     "audio_format": "auto",
+    "language": "auto",
 }
 
 
@@ -263,6 +264,22 @@ def set_audio_format(fmt):
     cfg = load_config()
     cfg["audio_format"] = clean_fmt
     save_config(cfg)
+
+
+def get_app_language():
+    """Mengambil preferensi bahasa aplikasi dari config ('auto', 'en', 'id', 'ja', 'zh')."""
+    cfg = load_config()
+    return cfg.get("language", "auto")
+
+
+def set_app_language(lang_code):
+    """Menyimpan preferensi bahasa aplikasi ke config.json dan mengaktifkannya di memori."""
+    from i18n import set_active_language
+    cfg = load_config()
+    clean_code = str(lang_code).strip().lower()
+    cfg["language"] = clean_code
+    save_config(cfg)
+    set_active_language(clean_code)
 
 
 def load_history():
