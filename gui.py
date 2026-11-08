@@ -220,8 +220,8 @@ class SettingsDialog(tk.Toplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Pengaturan - JapaneseASMR Downloader")
-        self.geometry("740x520")
-        self.minsize(700, 480)
+        self.geometry("890x630")
+        self.minsize(820, 540)
         self.configure(bg="#1e1e2e")
         self.transient(parent)
         apply_dark_titlebar(self)
@@ -243,8 +243,8 @@ class SettingsDialog(tk.Toplevel):
             ph = parent.winfo_height()
             px = parent.winfo_x()
             py = parent.winfo_y()
-            cx = px + (pw - 740) // 2
-            cy = py + (ph - 520) // 2
+            cx = px + (pw - 890) // 2
+            cy = py + (ph - 630) // 2
             self.geometry(f"+{max(0, cx)}+{max(0, cy)}")
         except Exception:
             pass
@@ -269,7 +269,7 @@ class SettingsDialog(tk.Toplevel):
 
     def _build_ui(self):
         self.title(t("settings_title"))
-        # 1. Header Bar Dialog
+        # 1. Header Bar Dialog (Top)
         header_bar = tk.Frame(self, bg="#282a36", height=45)
         header_bar.pack(fill="x", side="top")
 
@@ -284,12 +284,46 @@ class SettingsDialog(tk.Toplevel):
         )
         lbl_header.pack(side="left")
 
-        # 2. Main Body: Sidebar (Kiri) & Content Panel (Kanan)
+        # 2. Footer Bar Dialog (Bottom) - Dikelola lebih dulu agar tombol Simpan/Batal selalu terlihat di bawah
+        footer_bar = tk.Frame(self, bg="#181825", height=52)
+        footer_bar.pack(fill="x", side="bottom")
+
+        btn_save = tk.Button(
+            footer_bar,
+            text=t("btn_save_settings"),
+            font=("Segoe UI", 9, "bold"),
+            bg="#50fa7b",
+            fg="#1e1e2e",
+            activebackground="#8be9fd",
+            bd=0,
+            padx=20,
+            pady=7,
+            cursor="hand2",
+            command=self._save_settings,
+        )
+        btn_save.pack(side="right", padx=16, pady=10)
+
+        btn_cancel = tk.Button(
+            footer_bar,
+            text=t("btn_cancel"),
+            font=("Segoe UI", 9),
+            bg="#44475a",
+            fg="#f8f8f2",
+            activebackground="#6272a4",
+            bd=0,
+            padx=16,
+            pady=7,
+            cursor="hand2",
+            command=self.destroy,
+        )
+        btn_cancel.pack(side="right", padx=(0, 8), pady=10)
+
+        # 3. Main Body: Sidebar (Kiri) & Scrollable Content Panel (Kanan)
         body_frame = tk.Frame(self, bg="#1e1e2e")
         body_frame.pack(fill="both", expand=True)
 
         # Sidebar Kiri
-        self.sidebar = tk.Frame(body_frame, bg="#181825", width=180)
+        self.sidebar = tk.Frame(body_frame, bg="#181825", width=200)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
@@ -332,46 +366,54 @@ class SettingsDialog(tk.Toplevel):
             btn.pack(fill="x")
             self.nav_buttons[tab_id] = btn
 
-        # Content Panel Kanan
-        self.content_container = tk.Frame(body_frame, bg="#1e1e2e", padx=24, pady=16)
-        self.content_container.pack(side="right", fill="both", expand=True)
+        # Content Panel Kanan dengan Canvas Scrollable + Scrollbar
+        content_wrapper = tk.Frame(body_frame, bg="#1e1e2e")
+        content_wrapper.pack(side="right", fill="both", expand=True)
 
-        # 3. Footer Bar Dialog (Batal & Simpan)
-        footer_bar = tk.Frame(self, bg="#181825", height=52)
-        footer_bar.pack(fill="x", side="bottom")
+        self.content_canvas = tk.Canvas(content_wrapper, bg="#1e1e2e", highlightthickness=0, bd=0)
+        self.content_scrollbar = ttk.Scrollbar(content_wrapper, orient="vertical", command=self.content_canvas.yview)
 
-        btn_save = tk.Button(
-            footer_bar,
-            text=t("btn_save_settings"),
-            font=("Segoe UI", 9, "bold"),
-            bg="#50fa7b",
-            fg="#1e1e2e",
-            activebackground="#8be9fd",
-            bd=0,
-            padx=18,
-            pady=6,
-            cursor="hand2",
-            command=self._save_settings,
-        )
-        btn_save.pack(side="right", padx=16, pady=10)
+        self.content_container = tk.Frame(self.content_canvas, bg="#1e1e2e", padx=24, pady=16)
+        self.content_window_id = self.content_canvas.create_window((0, 0), window=self.content_container, anchor="nw")
 
-        btn_cancel = tk.Button(
-            footer_bar,
-            text=t("btn_cancel"),
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#f8f8f2",
-            activebackground="#6272a4",
-            bd=0,
-            padx=16,
-            pady=6,
-            cursor="hand2",
-            command=self.destroy,
-        )
-        btn_cancel.pack(side="right", padx=(0, 8), pady=10)
+        self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
+        self.content_canvas.pack(side="left", fill="both", expand=True)
+
+        def _update_scroll_region(event=None):
+            if not self.content_canvas.winfo_exists():
+                return
+            self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all"))
+            bbox = self.content_canvas.bbox("all")
+            if bbox and (bbox[3] - bbox[1]) > self.content_canvas.winfo_height():
+                if not self.content_scrollbar.winfo_ismapped():
+                    self.content_scrollbar.pack(side="right", fill="y")
+            else:
+                if self.content_scrollbar.winfo_ismapped():
+                    self.content_scrollbar.pack_forget()
+
+        def _sync_content_width(event):
+            if self.content_canvas.winfo_exists():
+                self.content_canvas.itemconfig(self.content_window_id, width=event.width)
+                _update_scroll_region()
+
+        self.content_container.bind("<Configure>", _update_scroll_region)
+        self.content_canvas.bind("<Configure>", _sync_content_width)
+
+        # Mousewheel scroll binding khusus jendela dialog
+        def _on_mousewheel(event):
+            if self.winfo_exists() and self.content_canvas.winfo_exists():
+                bbox = self.content_canvas.bbox("all")
+                if bbox and (bbox[3] - bbox[1]) > self.content_canvas.winfo_height():
+                    self.content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+
+        self.bind("<MouseWheel>", _on_mousewheel)
 
     def _show_tab(self, tab_name):
         self.current_tab = tab_name
+
+        # Reset scroll ke atas saat beralih tab
+        if hasattr(self, "content_canvas") and self.content_canvas.winfo_exists():
+            self.content_canvas.yview_moveto(0)
 
         # Update styling sidebar buttons
         for t_id, btn in self.nav_buttons.items():
