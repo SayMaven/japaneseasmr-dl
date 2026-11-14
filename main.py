@@ -9,7 +9,7 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from gui import JapaneseASMRApp
+from ui import JapaneseASMRApp
 
 
 def main():
