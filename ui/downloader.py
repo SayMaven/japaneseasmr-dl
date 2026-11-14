@@ -39,17 +39,22 @@ class DownloadWorkerMixin:
     """Mixin untuk mengelola proses download latar belakang, status progress, dan penghentian tugas."""
     def _update_progress(self, val_pct, status_text=None, speed=None, eta=None, size_str=None):
         def _apply():
-            clamped = max(0, min(100, val_pct))
-            self.progress_bar["value"] = clamped
-            self.lbl_progress_pct.config(text=f"{int(clamped)}%")
-            if status_text:
-                self.lbl_progress_status.config(text=f"Status: {status_text}")
+            clamped = max(0.0, min(100.0, float(val_pct)))
+            if hasattr(self, "progress_bar"):
+                if hasattr(self.progress_bar, "set"):
+                    self.progress_bar.set(clamped / 100.0)
+                else:
+                    self.progress_bar["value"] = clamped
+            if hasattr(self, "lbl_progress_pct"):
+                self.lbl_progress_pct.configure(text=f"{int(clamped)}%")
+            if status_text and hasattr(self, "lbl_progress_status"):
+                self.lbl_progress_status.configure(text=f"Status: {status_text}")
             if speed is not None and hasattr(self, "lbl_progress_speed"):
-                self.lbl_progress_speed.config(text=speed)
+                self.lbl_progress_speed.configure(text=speed)
             if eta is not None and hasattr(self, "lbl_progress_eta"):
-                self.lbl_progress_eta.config(text=eta)
+                self.lbl_progress_eta.configure(text=eta)
             if size_str is not None and hasattr(self, "lbl_progress_size"):
-                self.lbl_progress_size.config(text=size_str)
+                self.lbl_progress_size.configure(text=size_str)
         self.after(0, _apply)
 
     def _start_download_thread(self):

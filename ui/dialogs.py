@@ -1,7 +1,28 @@
 import ctypes
 import sys
 import tkinter as tk
+import customtkinter as ctk
+
 from i18n import t
+from ui.theme import (
+    ACCENT_HOVER,
+    ACCENT_PRIMARY,
+    BORDER_SUBTLE,
+    FONT_BODY,
+    FONT_BODY_BOLD,
+    FONT_SUBTITLE,
+    RADIUS_LG,
+    RADIUS_MD,
+    STATUS_DANGER,
+    STATUS_INFO,
+    STATUS_SUCCESS,
+    STATUS_WARNING,
+    SURFACE_CARD,
+    SURFACE_ELEVATED,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 
 
 def apply_dark_titlebar(window):
@@ -22,118 +43,153 @@ def apply_dark_titlebar(window):
 
 
 class InAppModal:
-    """Modal Dialog In-App yang muncul melayang elegan di tengah jendela aplikasi tanpa menutupi background."""
+    """Modal Dialog Modern berbasis CustomTkinter dengan elevasi card dan rounded corner."""
     @staticmethod
     def show(parent, title, message, dialog_type="info", confirm_text="OK", cancel_text="Batal"):
         result = [False]
         wait_var = tk.BooleanVar(parent, value=False)
 
         type_configs = {
-            "info": {"bg": "#50fa7b", "fg": "#1e1e2e", "symbol": "i", "title": title or "Selesai", "title_color": "#50fa7b", "border": "#50fa7b"},
-            "warning": {"bg": "#f1fa8c", "fg": "#1e1e2e", "symbol": "!", "title": title or "Peringatan", "title_color": "#f1fa8c", "border": "#f1fa8c"},
-            "error": {"bg": "#ff5555", "fg": "#ffffff", "symbol": "✕", "title": title or "Error", "title_color": "#ff5555", "border": "#ff5555"},
-            "question": {"bg": "#8be9fd", "fg": "#1e1e2e", "symbol": "?", "title": title or "Konfirmasi", "title_color": "#8be9fd", "border": "#bd93f9"},
+            "info": {
+                "bg": STATUS_INFO,
+                "symbol": "ℹ",
+                "title": title or "Informasi",
+                "title_color": STATUS_INFO,
+                "border": BORDER_SUBTLE,
+            },
+            "warning": {
+                "bg": STATUS_WARNING,
+                "symbol": "⚠",
+                "title": title or "Peringatan",
+                "title_color": STATUS_WARNING,
+                "border": STATUS_WARNING,
+            },
+            "error": {
+                "bg": STATUS_DANGER,
+                "symbol": "✕",
+                "title": title or "Error",
+                "title_color": STATUS_DANGER,
+                "border": STATUS_DANGER,
+            },
+            "question": {
+                "bg": ACCENT_PRIMARY,
+                "symbol": "?",
+                "title": title or "Konfirmasi",
+                "title_color": ACCENT_PRIMARY,
+                "border": ACCENT_PRIMARY,
+            },
         }
         cfg = type_configs.get(dialog_type, type_configs["info"])
 
-        # Card Dialog Melayang di Tengah Jendela (Tanpa Frame Hitam Fullscreen)
-        outer_card = tk.Frame(parent, bg=cfg["border"], bd=2)
-        outer_card.place(relx=0.5, rely=0.5, anchor="center")
+        # Card Dialog Melayang di Tengah Jendela
+        card = ctk.CTkFrame(
+            parent,
+            corner_radius=RADIUS_LG,
+            fg_color=SURFACE_ELEVATED,
+            border_width=1,
+            border_color=cfg["border"],
+        )
+        card.place(relx=0.5, rely=0.5, anchor="center")
 
-        card = tk.Frame(outer_card, bg="#282a36", padx=26, pady=22)
-        card.pack(fill="both", expand=True, padx=1, pady=1)
+        content = ctk.CTkFrame(card, fg_color="transparent")
+        content.pack(padx=24, pady=20, fill="both", expand=True)
 
-        # Header (Canvas Badge + Judul)
-        header = tk.Frame(card, bg="#282a36")
-        header.pack(fill="x", pady=(0, 14))
+        # Header (Badge + Judul)
+        header = ctk.CTkFrame(content, fg_color="transparent")
+        header.pack(fill="x", pady=(0, 12))
 
-        badge = tk.Canvas(header, width=30, height=30, bg="#282a36", highlightthickness=0)
-        badge.pack(side="left", padx=(0, 12))
-        badge.create_oval(2, 2, 28, 28, fill=cfg["bg"], outline=cfg["bg"])
-        badge.create_text(15, 15, text=cfg["symbol"], fill=cfg["fg"], font=("Segoe UI", 12, "bold"))
+        badge = ctk.CTkLabel(
+            header,
+            text=f" {cfg['symbol']} ",
+            font=("Segoe UI", 13, "bold"),
+            fg_color=cfg["bg"],
+            text_color="#151821",
+            corner_radius=12,
+            width=28,
+            height=28,
+        )
+        badge.pack(side="left", padx=(0, 10))
 
-        lbl_title = tk.Label(header, text=cfg["title"], font=("Segoe UI", 12, "bold"), bg="#282a36", fg=cfg["title_color"])
-        lbl_title.pack(side="left", anchor="center")
+        lbl_title = ctk.CTkLabel(
+            header,
+            text=cfg["title"],
+            font=FONT_SUBTITLE,
+            text_color=cfg["title_color"],
+            anchor="w",
+        )
+        lbl_title.pack(side="left", fill="x", expand=True)
 
         # Message Text
-        msg_frame = tk.Frame(card, bg="#282a36")
-        msg_frame.pack(fill="both", expand=True, pady=(0, 20))
-
-        lbl_msg = tk.Label(
-            msg_frame,
+        lbl_msg = ctk.CTkLabel(
+            content,
             text=message,
-            font=("Segoe UI", 10),
-            bg="#282a36",
-            fg="#f8f8f2",
-            wraplength=420,
+            font=FONT_BODY,
+            text_color=TEXT_PRIMARY,
+            wraplength=440,
             justify="left",
             anchor="w",
         )
-        lbl_msg.pack(fill="x")
+        lbl_msg.pack(fill="x", pady=(0, 20))
 
         # Action Buttons
-        btn_frame = tk.Frame(card, bg="#282a36")
+        btn_frame = ctk.CTkFrame(content, fg_color="transparent")
         btn_frame.pack(fill="x")
 
         def _close(val):
-            if outer_card.winfo_exists():
+            if card.winfo_exists():
                 result[0] = val
-                outer_card.destroy()
+                card.destroy()
                 wait_var.set(True)
 
         if dialog_type == "question":
-            btn_cancel = tk.Button(
+            btn_cancel = ctk.CTkButton(
                 btn_frame,
                 text=cancel_text,
-                font=("Segoe UI", 9),
-                bg="#44475a",
-                fg="#f8f8f2",
-                activebackground="#6272a4",
-                activeforeground="#ffffff",
-                bd=0,
-                padx=18,
-                pady=6,
-                cursor="hand2",
+                font=FONT_BODY,
+                fg_color=SURFACE_CARD,
+                hover_color=BORDER_SUBTLE,
+                text_color=TEXT_SECONDARY,
+                corner_radius=RADIUS_MD,
+                height=32,
+                width=90,
                 command=lambda: _close(False),
             )
-            btn_cancel.pack(side="right", padx=(10, 0))
+            btn_cancel.pack(side="right", padx=(8, 0))
 
-            btn_ok = tk.Button(
+            btn_ok = ctk.CTkButton(
                 btn_frame,
                 text=confirm_text,
-                font=("Segoe UI", 9, "bold"),
-                bg="#bd93f9",
-                fg="#1e1e2e",
-                activebackground="#ff79c6",
-                bd=0,
-                padx=18,
-                pady=6,
-                cursor="hand2",
+                font=FONT_BODY_BOLD,
+                fg_color=ACCENT_PRIMARY,
+                hover_color=ACCENT_HOVER,
+                text_color="#ffffff",
+                corner_radius=RADIUS_MD,
+                height=32,
+                width=100,
                 command=lambda: _close(True),
             )
             btn_ok.pack(side="right")
             btn_ok.focus_set()
         else:
-            btn_ok = tk.Button(
+            btn_ok = ctk.CTkButton(
                 btn_frame,
                 text=confirm_text,
-                font=("Segoe UI", 9, "bold"),
-                bg="#bd93f9",
-                fg="#1e1e2e",
-                activebackground="#ff79c6",
-                bd=0,
-                padx=24,
-                pady=6,
-                cursor="hand2",
+                font=FONT_BODY_BOLD,
+                fg_color=ACCENT_PRIMARY,
+                hover_color=ACCENT_HOVER,
+                text_color="#ffffff",
+                corner_radius=RADIUS_MD,
+                height=32,
+                width=100,
                 command=lambda: _close(True),
             )
             btn_ok.pack(side="right")
             btn_ok.focus_set()
 
-        parent.bind("<Return>", lambda e: _close(True) if outer_card.winfo_exists() else None)
-        parent.bind("<Escape>", lambda e: _close(False) if outer_card.winfo_exists() else None)
+        parent.bind("<Return>", lambda e: _close(True) if card.winfo_exists() else None)
+        parent.bind("<Escape>", lambda e: _close(False) if card.winfo_exists() else None)
 
-        outer_card.lift()
+        card.lift()
         parent.wait_variable(wait_var)
         return result[0]
 
@@ -154,4 +210,3 @@ def ask_dark_yesno(parent, title, message, confirm_text=None, cancel_text=None):
     c_text = confirm_text or t("btn_yes")
     can_text = cancel_text or t("btn_no")
     return InAppModal.show(parent, title, message, dialog_type="question", confirm_text=c_text, cancel_text=can_text)
-

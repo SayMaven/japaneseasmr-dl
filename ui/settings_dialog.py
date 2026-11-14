@@ -4,6 +4,7 @@ import threading
 import tkinter as tk
 from tkinter import filedialog, ttk
 import webbrowser
+import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from config_manager import (
@@ -31,16 +32,43 @@ from ui.dialogs import (
     show_dark_info,
     show_dark_warning,
 )
+from ui.theme import (
+    ACCENT_HOVER,
+    ACCENT_PRIMARY,
+    BG_APP,
+    BORDER_ACTIVE,
+    BORDER_SUBTLE,
+    FONT_BODY,
+    FONT_BODY_BOLD,
+    FONT_CAPTION,
+    FONT_CODE,
+    FONT_SUBTITLE,
+    FONT_TITLE,
+    RADIUS_LG,
+    RADIUS_MD,
+    RADIUS_SM,
+    STATUS_DANGER,
+    STATUS_INFO,
+    STATUS_SUCCESS,
+    STATUS_WARNING,
+    SURFACE_CARD,
+    SURFACE_ELEVATED,
+    SURFACE_INPUT,
+    TEXT_MUTED,
+    TEXT_PRIMARY,
+    TEXT_SECONDARY,
+)
 
-class SettingsDialog(tk.Toplevel):
-    """Dialog Pengaturan Modern dengan Sidebar Navigasi Vertikal (Kiri) dan Panel Konten (Kanan)."""
+
+class SettingsDialog(ctk.CTkToplevel):
+    """Dialog Pengaturan Modern dengan Sidebar Navigasi Vertikal dan Scrollable Content Panel."""
     def __init__(self, parent):
         super().__init__(parent)
         self.parent = parent
         self.title("Pengaturan - JapaneseASMR Downloader")
-        self.geometry("890x630")
+        self.geometry("900x640")
         self.minsize(820, 540)
-        self.configure(bg="#1e1e2e")
+        self.configure(fg_color=BG_APP)
         self.transient(parent)
         apply_dark_titlebar(self)
 
@@ -61,8 +89,8 @@ class SettingsDialog(tk.Toplevel):
             ph = parent.winfo_height()
             px = parent.winfo_x()
             py = parent.winfo_y()
-            cx = px + (pw - 890) // 2
-            cy = py + (ph - 630) // 2
+            cx = px + (pw - 900) // 2
+            cy = py + (ph - 640) // 2
             self.geometry(f"+{max(0, cx)}+{max(0, cy)}")
         except Exception:
             pass
@@ -87,77 +115,69 @@ class SettingsDialog(tk.Toplevel):
 
     def _build_ui(self):
         self.title(t("settings_title"))
+
         # 1. Header Bar Dialog (Top)
-        header_bar = tk.Frame(self, bg="#282a36", height=45)
+        header_bar = ctk.CTkFrame(self, fg_color=SURFACE_CARD, height=50, corner_radius=0)
         header_bar.pack(fill="x", side="top")
 
-        lbl_header = tk.Label(
+        lbl_header = ctk.CTkLabel(
             header_bar,
-            text=t("settings_header"),
-            font=("Segoe UI", 12, "bold"),
-            bg="#282a36",
-            fg="#f8f8f2",
-            padx=16,
-            pady=10,
+            text=f"⚙  {t('settings_header')}",
+            font=FONT_SUBTITLE,
+            text_color=TEXT_PRIMARY,
         )
-        lbl_header.pack(side="left")
+        lbl_header.pack(side="left", padx=20, pady=12)
 
-        # 2. Footer Bar Dialog (Bottom) - Dikelola lebih dulu agar tombol Simpan/Batal selalu terlihat di bawah
-        footer_bar = tk.Frame(self, bg="#181825", height=52)
+        # 2. Footer Bar Dialog (Bottom)
+        footer_bar = ctk.CTkFrame(self, fg_color=SURFACE_CARD, height=56, corner_radius=0)
         footer_bar.pack(fill="x", side="bottom")
 
-        btn_save = tk.Button(
+        btn_save = ctk.CTkButton(
             footer_bar,
             text=t("btn_save_settings"),
-            font=("Segoe UI", 9, "bold"),
-            bg="#50fa7b",
-            fg="#1e1e2e",
-            activebackground="#8be9fd",
-            bd=0,
-            padx=20,
-            pady=7,
-            cursor="hand2",
+            font=FONT_BODY_BOLD,
+            fg_color=ACCENT_PRIMARY,
+            hover_color=ACCENT_HOVER,
+            text_color="#ffffff",
+            corner_radius=RADIUS_MD,
+            height=36,
+            width=140,
             command=self._save_settings,
         )
         btn_save.pack(side="right", padx=16, pady=10)
 
-        btn_cancel = tk.Button(
+        btn_cancel = ctk.CTkButton(
             footer_bar,
             text=t("btn_cancel"),
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#f8f8f2",
-            activebackground="#6272a4",
-            bd=0,
-            padx=16,
-            pady=7,
-            cursor="hand2",
-            command=self.destroy,
+            font=FONT_BODY,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_PRIMARY,
+            corner_radius=RADIUS_MD,
+            height=36,
+            width=90,
+            command=self._on_dialog_close,
         )
         btn_cancel.pack(side="right", padx=(0, 8), pady=10)
 
         # 3. Main Body: Sidebar (Kiri) & Scrollable Content Panel (Kanan)
-        body_frame = tk.Frame(self, bg="#1e1e2e")
+        body_frame = ctk.CTkFrame(self, fg_color="transparent", corner_radius=0)
         body_frame.pack(fill="both", expand=True)
 
         # Sidebar Kiri
-        self.sidebar = tk.Frame(body_frame, bg="#181825", width=200)
+        self.sidebar = ctk.CTkFrame(body_frame, fg_color=SURFACE_CARD, width=200, corner_radius=0)
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        lbl_menu = tk.Label(
+        lbl_menu = ctk.CTkLabel(
             self.sidebar,
             text=t("lbl_category"),
-            font=("Segoe UI", 8, "bold"),
-            bg="#181825",
-            fg="#6272a4",
+            font=FONT_CAPTION,
+            text_color=TEXT_MUTED,
             anchor="w",
-            padx=16,
-            pady=12,
         )
-        lbl_menu.pack(fill="x")
+        lbl_menu.pack(fill="x", padx=16, pady=(16, 8))
 
-        # Tab Navigation Items
         tabs = [
             ("general", t("tab_settings_general")),
             ("download", t("tab_settings_download")),
@@ -166,81 +186,34 @@ class SettingsDialog(tk.Toplevel):
         ]
 
         for tab_id, label_text in tabs:
-            btn = tk.Button(
+            btn = ctk.CTkButton(
                 self.sidebar,
-                text=label_text,
-                font=("Segoe UI", 9, "bold"),
-                bg="#181825",
-                fg="#a6adc8",
-                activebackground="#282a36",
-                activeforeground="#f8f8f2",
+                text=f"  {label_text}",
+                font=FONT_BODY_BOLD,
                 anchor="w",
-                bd=0,
-                padx=16,
-                pady=10,
-                cursor="hand2",
-                command=lambda t=tab_id: self._show_tab(t),
+                corner_radius=RADIUS_MD,
+                height=38,
+                fg_color="transparent",
+                hover_color=SURFACE_ELEVATED,
+                text_color=TEXT_SECONDARY,
+                command=lambda tid=tab_id: self._show_tab(tid),
             )
-            btn.pack(fill="x")
+            btn.pack(fill="x", padx=10, pady=3)
             self.nav_buttons[tab_id] = btn
 
-        # Content Panel Kanan dengan Canvas Scrollable + Scrollbar
-        content_wrapper = tk.Frame(body_frame, bg="#1e1e2e")
-        content_wrapper.pack(side="right", fill="both", expand=True)
-
-        self.content_canvas = tk.Canvas(content_wrapper, bg="#1e1e2e", highlightthickness=0, bd=0)
-        self.content_scrollbar = ttk.Scrollbar(content_wrapper, orient="vertical", command=self.content_canvas.yview)
-
-        self.content_container = tk.Frame(self.content_canvas, bg="#1e1e2e", padx=24, pady=16)
-        self.content_window_id = self.content_canvas.create_window((0, 0), window=self.content_container, anchor="nw")
-
-        self.content_canvas.configure(yscrollcommand=self.content_scrollbar.set)
-        self.content_canvas.pack(side="left", fill="both", expand=True)
-
-        def _update_scroll_region(event=None):
-            if not self.content_canvas.winfo_exists():
-                return
-            self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all"))
-            bbox = self.content_canvas.bbox("all")
-            if bbox and (bbox[3] - bbox[1]) > self.content_canvas.winfo_height():
-                if not self.content_scrollbar.winfo_ismapped():
-                    self.content_scrollbar.pack(side="right", fill="y")
-            else:
-                if self.content_scrollbar.winfo_ismapped():
-                    self.content_scrollbar.pack_forget()
-
-        def _sync_content_width(event):
-            if self.content_canvas.winfo_exists():
-                self.content_canvas.itemconfig(self.content_window_id, width=event.width)
-                _update_scroll_region()
-
-        self.content_container.bind("<Configure>", _update_scroll_region)
-        self.content_canvas.bind("<Configure>", _sync_content_width)
-
-        # Mousewheel scroll binding khusus jendela dialog
-        def _on_mousewheel(event):
-            if self.winfo_exists() and self.content_canvas.winfo_exists():
-                bbox = self.content_canvas.bbox("all")
-                if bbox and (bbox[3] - bbox[1]) > self.content_canvas.winfo_height():
-                    self.content_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
-
-        self.bind("<MouseWheel>", _on_mousewheel)
+        # Content Panel Kanan (Scrollable Frame)
+        self.content_container = ctk.CTkScrollableFrame(body_frame, fg_color="transparent")
+        self.content_container.pack(side="right", fill="both", expand=True, padx=20, pady=16)
 
     def _show_tab(self, tab_name):
         self.current_tab = tab_name
 
-        # Reset scroll ke atas saat beralih tab
-        if hasattr(self, "content_canvas") and self.content_canvas.winfo_exists():
-            self.content_canvas.yview_moveto(0)
-
-        # Update styling sidebar buttons
         for t_id, btn in self.nav_buttons.items():
             if t_id == tab_name:
-                btn.config(bg="#282a36", fg="#bd93f9")
+                btn.configure(fg_color=ACCENT_PRIMARY, text_color="#ffffff")
             else:
-                btn.config(bg="#181825", fg="#a6adc8")
+                btn.configure(fg_color="transparent", text_color=TEXT_SECONDARY)
 
-        # Clear existing content
         for child in self.content_container.winfo_children():
             child.destroy()
 
@@ -255,39 +228,24 @@ class SettingsDialog(tk.Toplevel):
 
     # ==================== TAB 1: UMUM ====================
     def _render_general_tab(self):
-        lbl_title = tk.Label(
+        lbl_title = ctk.CTkLabel(
             self.content_container,
             text=t("lbl_settings_general_title"),
-            font=("Segoe UI", 12, "bold"),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
+            font=FONT_TITLE,
+            text_color=TEXT_PRIMARY,
             anchor="w",
         )
         lbl_title.pack(fill="x", pady=(0, 14))
 
-        # Pilihan Bahasa (Language)
-        lbl_lang = tk.Label(
-            self.content_container,
-            text=t("lbl_language"),
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_lang.pack(fill="x", pady=(2, 2))
+        # Card: Bahasa
+        card_lang = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_lang.pack(fill="x", pady=(0, 12))
 
-        lbl_lang_desc = tk.Label(
-            self.content_container,
-            text=t("lbl_language_desc"),
-            font=("Segoe UI", 8),
-            bg="#1e1e2e",
-            fg="#6272a4",
-            anchor="w",
-        )
-        lbl_lang_desc.pack(fill="x", pady=(0, 6))
+        p_lang = ctk.CTkFrame(card_lang, fg_color="transparent")
+        p_lang.pack(fill="x", padx=16, pady=12)
 
-        lang_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        lang_box.pack(fill="x", pady=(0, 12))
+        ctk.CTkLabel(p_lang, text=t("lbl_language"), font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x")
+        ctk.CTkLabel(p_lang, text=t("lbl_language_desc"), font=FONT_CAPTION, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=(2, 8))
 
         lang_options = get_available_languages()
         disp_map = {code: disp for code, disp in lang_options}
@@ -296,638 +254,436 @@ class SettingsDialog(tk.Toplevel):
         cur_code = self.var_language.get()
         cur_disp = disp_map.get(cur_code, lang_options[0][1])
 
-        self.cbo_lang = ttk.Combobox(
-            lang_box,
+        def _on_lang_changed(choice):
+            self.var_language.set(code_map.get(choice, "auto"))
+
+        self.cbo_lang = ctk.CTkOptionMenu(
+            p_lang,
             values=[disp for _, disp in lang_options],
-            state="readonly",
-            font=("Segoe UI", 9),
-            width=32,
+            command=_on_lang_changed,
+            font=FONT_BODY,
+            corner_radius=RADIUS_MD,
+            fg_color=SURFACE_INPUT,
+            button_color=BORDER_SUBTLE,
+            button_hover_color=ACCENT_PRIMARY,
+            height=32,
         )
         self.cbo_lang.set(cur_disp)
-        self.cbo_lang.pack(side="left")
+        self.cbo_lang.pack(anchor="w")
 
-        def _on_lang_changed(e):
-            sel_disp = self.cbo_lang.get()
-            self.var_language.set(code_map.get(sel_disp, "auto"))
+        # Card: Folder Download
+        card_dir = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_dir.pack(fill="x", pady=(0, 12))
 
-        self.cbo_lang.bind("<<ComboboxSelected>>", _on_lang_changed)
+        p_dir = ctk.CTkFrame(card_dir, fg_color="transparent")
+        p_dir.pack(fill="x", padx=16, pady=12)
 
-        sep0 = tk.Frame(self.content_container, bg="#313244", height=1)
-        sep0.pack(fill="x", pady=10)
+        ctk.CTkLabel(p_dir, text=t("lbl_storage_folder"), font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x")
+        ctk.CTkLabel(p_dir, text=t("lbl_storage_folder_desc"), font=FONT_CAPTION, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=(2, 8))
 
-        # Folder Simpan
-        lbl_dir = tk.Label(
-            self.content_container,
-            text=t("lbl_download_dir"),
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_dir.pack(fill="x", pady=(4, 2))
+        dir_row = ctk.CTkFrame(p_dir, fg_color="transparent")
+        dir_row.pack(fill="x")
 
-        dir_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        dir_box.pack(fill="x", pady=(0, 14))
-
-        ent_dir = tk.Entry(
-            dir_box,
+        self.entry_dir = ctk.CTkEntry(
+            dir_row,
             textvariable=self.var_download_dir,
-            font=("Segoe UI", 9),
-            bg="#282a36",
-            fg="#f8f8f2",
-            insertbackground="#f8f8f2",
-            bd=1,
-            relief="solid",
+            font=FONT_CODE,
+            corner_radius=RADIUS_MD,
+            fg_color=SURFACE_INPUT,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+            height=34,
         )
-        ent_dir.pack(side="left", fill="x", expand=True, ipady=4, padx=(0, 8))
+        self.entry_dir.pack(side="left", fill="x", expand=True, padx=(0, 8))
 
-        btn_browse = tk.Button(
-            dir_box,
-            text="Browse...",
-            font=("Segoe UI", 9),
-            bg="#6272a4",
-            fg="#f8f8f2",
-            activebackground="#bd93f9",
-            bd=0,
-            padx=12,
-            pady=3,
-            cursor="hand2",
+        btn_browse = ctk.CTkButton(
+            dir_row,
+            text=t("btn_browse"),
+            font=FONT_BODY_BOLD,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_PRIMARY,
+            corner_radius=RADIUS_MD,
+            height=34,
+            width=90,
             command=self._browse_dir,
         )
         btn_browse.pack(side="right")
 
-        # Separator
-        sep1 = tk.Frame(self.content_container, bg="#313244", height=1)
-        sep1.pack(fill="x", pady=8)
+        # Card: Opsi Otomatisasi (Switches)
+        card_opts = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_opts.pack(fill="x", pady=(0, 12))
 
-        # Preferensi & Perilaku File
-        lbl_name_opt = tk.Label(
-            self.content_container,
-            text="Preferensi & Perilaku Unduhan:",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_name_opt.pack(fill="x", pady=(4, 6))
+        p_opts = ctk.CTkFrame(card_opts, fg_color="transparent")
+        p_opts.pack(fill="x", padx=16, pady=12)
 
-        chk_name = tk.Checkbutton(
-            self.content_container,
-            text="Gunakan Judul Asli Karya sebagai Nama File Audio (contoh: [RJ01673437] Judul)",
+        ctk.CTkLabel(p_opts, text="Preferensi Otomatisasi", font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x", pady=(0, 8))
+
+        self.chk_detailed = ctk.CTkSwitch(
+            p_opts,
+            text=t("chk_detailed_name"),
             variable=self.var_detailed_name,
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#50fa7b",
-            anchor="w",
+            font=FONT_BODY,
+            text_color=TEXT_PRIMARY,
+            fg_color=SURFACE_INPUT,
+            progress_color=ACCENT_PRIMARY,
         )
-        chk_name.pack(fill="x", pady=4)
+        self.chk_detailed.pack(fill="x", pady=4)
 
-        # Pilihan Format Audio Output
-        lbl_fmt_opt = tk.Label(
-            self.content_container,
-            text="Format Berkas Audio Output:",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_fmt_opt.pack(fill="x", pady=(8, 2))
-
-        fmt_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        fmt_box.pack(fill="x", pady=(0, 6))
-
-        r_auto = tk.Radiobutton(
-            fmt_box,
-            text="Otomatis / Sesuai Sumber (Rekomendasi - Cepat & Asli, MP3 + CUE Sheet)",
-            variable=self.var_audio_format,
-            value="auto",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#50fa7b",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#50fa7b",
-            anchor="w",
-        )
-        r_auto.pack(fill="x", pady=1)
-
-        r_m4a = tk.Radiobutton(
-            fmt_box,
-            text="M4A (Apple AAC) - Satu Berkas Utuh, Bab Tertanam Tanpa File CUE",
-            variable=self.var_audio_format,
-            value="m4a",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#f8f8f2",
-            anchor="w",
-        )
-        r_m4a.pack(fill="x", pady=1)
-
-        r_mp3 = tk.Radiobutton(
-            fmt_box,
-            text="MP3 (LAME CBR 320k) - Format Klasik Kompatibilitas Penuh",
-            variable=self.var_audio_format,
-            value="mp3",
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#f8f8f2",
-            anchor="w",
-        )
-        r_mp3.pack(fill="x", pady=1)
-
-        chk_notify = tk.Checkbutton(
-            self.content_container,
-            text="Tampilkan Kotak Dialog Notifikasi Pop-up saat Semua Unduhan Selesai",
+        self.chk_notify = ctk.CTkSwitch(
+            p_opts,
+            text=t("chk_notify_popup"),
             variable=self.var_notify_popup,
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#50fa7b",
-            anchor="w",
+            font=FONT_BODY,
+            text_color=TEXT_PRIMARY,
+            fg_color=SURFACE_INPUT,
+            progress_color=ACCENT_PRIMARY,
         )
-        chk_notify.pack(fill="x", pady=4)
+        self.chk_notify.pack(fill="x", pady=4)
 
-        chk_clip = tk.Checkbutton(
-            self.content_container,
-            text="Deteksi Otomatis Kode RJ dari Clipboard saat Tombol Tempel Ditekan",
+        self.chk_clipboard = ctk.CTkSwitch(
+            p_opts,
+            text=t("chk_auto_clipboard"),
             variable=self.var_auto_clipboard,
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
-            selectcolor="#282a36",
-            activebackground="#1e1e2e",
-            activeforeground="#50fa7b",
-            anchor="w",
+            font=FONT_BODY,
+            text_color=TEXT_PRIMARY,
+            fg_color=SURFACE_INPUT,
+            progress_color=ACCENT_PRIMARY,
         )
-        chk_clip.pack(fill="x", pady=4)
+        self.chk_clipboard.pack(fill="x", pady=4)
 
     def _browse_dir(self):
-        new_d = filedialog.askdirectory(initialdir=self.var_download_dir.get(), title="Pilih Folder Download")
-        if new_d:
-            self.var_download_dir.set(new_d)
+        d = filedialog.askdirectory(initialdir=self.var_download_dir.get())
+        if d:
+            self.var_download_dir.set(os.path.abspath(d))
 
-    # ==================== TAB 2: UNDUHAN ====================
+    # ==================== TAB 2: DOWNLOAD & ENGINE ====================
     def _render_download_tab(self):
-        lbl_title = tk.Label(
+        lbl_title = ctk.CTkLabel(
             self.content_container,
-            text="Pengaturan Unduhan & Jaringan",
-            font=("Segoe UI", 12, "bold"),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
+            text=t("lbl_settings_download_title"),
+            font=FONT_TITLE,
+            text_color=TEXT_PRIMARY,
             anchor="w",
         )
         lbl_title.pack(fill="x", pady=(0, 14))
 
-        # Jumlah Koneksi Paralel
-        lbl_conn = tk.Label(
-            self.content_container,
-            text="Jumlah Koneksi Simultan per Track (Aria2c Multi-thread):",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
+        # Card: Format Audio
+        card_fmt = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_fmt.pack(fill="x", pady=(0, 12))
+
+        p_fmt = ctk.CTkFrame(card_fmt, fg_color="transparent")
+        p_fmt.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(p_fmt, text=t("lbl_audio_format"), font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x")
+        ctk.CTkLabel(p_fmt, text=t("lbl_audio_format_desc"), font=FONT_CAPTION, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=(2, 8))
+
+        fmt_options = [
+            ("auto", t("fmt_auto")),
+            ("m4a", t("fmt_m4a")),
+            ("mp3", t("fmt_mp3")),
+            ("flac", t("fmt_flac")),
+            ("wav", t("fmt_wav")),
+        ]
+        fmt_disp_map = {k: v for k, v in fmt_options}
+        fmt_code_map = {v: k for k, v in fmt_options}
+
+        def _on_fmt_changed(choice):
+            self.var_audio_format.set(fmt_code_map.get(choice, "auto"))
+
+        cur_fmt = self.var_audio_format.get()
+        cbo_fmt = ctk.CTkOptionMenu(
+            p_fmt,
+            values=[v for _, v in fmt_options],
+            command=_on_fmt_changed,
+            font=FONT_BODY,
+            corner_radius=RADIUS_MD,
+            fg_color=SURFACE_INPUT,
+            button_color=BORDER_SUBTLE,
+            button_hover_color=ACCENT_PRIMARY,
+            height=32,
         )
-        lbl_conn.pack(fill="x", pady=(4, 2))
+        cbo_fmt.set(fmt_disp_map.get(cur_fmt, fmt_options[0][1]))
+        cbo_fmt.pack(anchor="w")
 
-        conn_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        conn_box.pack(fill="x", pady=(0, 10))
+        # Card: Koneksi Paralel (Aria2c)
+        card_conn = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_conn.pack(fill="x", pady=(0, 12))
 
-        spn_conn = ttk.Spinbox(
-            conn_box,
-            from_=1,
-            to=32,
-            textvariable=self.var_connections,
-            font=("Segoe UI", 9),
-            width=8,
+        p_conn = ctk.CTkFrame(card_conn, fg_color="transparent")
+        p_conn.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(p_conn, text=t("lbl_aria2_connections"), font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x")
+        ctk.CTkLabel(p_conn, text=t("lbl_aria2_connections_desc"), font=FONT_CAPTION, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=(2, 8))
+
+        conn_options = ["4", "8", "16", "24", "32"]
+        cbo_conn = ctk.CTkOptionMenu(
+            p_conn,
+            values=conn_options,
+            command=lambda v: self.var_connections.set(int(v)),
+            font=FONT_BODY,
+            corner_radius=RADIUS_MD,
+            fg_color=SURFACE_INPUT,
+            button_color=BORDER_SUBTLE,
+            button_hover_color=ACCENT_PRIMARY,
+            height=32,
+            width=100,
         )
-        spn_conn.pack(side="left", padx=(0, 10))
+        cbo_conn.set(str(self.var_connections.get()))
+        cbo_conn.pack(anchor="w")
 
-        lbl_conn_hint = tk.Label(
-            conn_box,
-            text="Koneksi paralel (Default: 16). Maks. 16 untuk server file tunggal (Aria2c), s/d 32 untuk multi-stream.",
-            font=("Segoe UI", 8),
-            bg="#1e1e2e",
-            fg="#6272a4",
-        )
-        lbl_conn_hint.pack(side="left")
+        # Card: Status & Pembaruan yt-dlp
+        card_upd = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_upd.pack(fill="x", pady=(0, 12))
 
-        # Separator
-        sep1 = tk.Frame(self.content_container, bg="#313244", height=1)
-        sep1.pack(fill="x", pady=10)
+        p_upd = ctk.CTkFrame(card_upd, fg_color="transparent")
+        p_upd.pack(fill="x", padx=16, pady=12)
 
-        # Pembaruan Engine yt-dlp Section
-        lbl_upd_head = tk.Label(
-            self.content_container,
-            text="Pembaruan Engine yt-dlp:",
-            font=("Segoe UI", 9, "bold"),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
-            anchor="w",
-        )
-        lbl_upd_head.pack(fill="x", pady=(0, 6))
+        ctk.CTkLabel(p_upd, text=t("lbl_ytdlp_engine"), font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x")
 
-        ytdlp_card = tk.Frame(self.content_container, bg="#282a36", padx=14, pady=10)
-        ytdlp_card.pack(fill="x", pady=(0, 10))
+        ver = get_ytdlp_version()
+        ctk.CTkLabel(p_upd, text=f"Versi yt-dlp Terpasang: {ver}", font=FONT_CODE, text_color=STATUS_INFO, anchor="w").pack(fill="x", pady=(4, 8))
 
-        # Cek versi yt-dlp secara non-blocking di background agar UI tidak freeze
-        init_ver_text = getattr(self, "_cached_ytdlp_ver", None) or "Memuat versi..."
-        self.lbl_ytdlp_ver = tk.Label(
-            ytdlp_card,
-            text=f"Versi Terpasang: {init_ver_text}",
-            font=("Segoe UI", 9, "bold"),
-            bg="#282a36",
-            fg="#50fa7b",
-            anchor="w",
-        )
-        self.lbl_ytdlp_ver.pack(fill="x", pady=(0, 6))
-
-        def _async_load_ver():
-            ver = get_ytdlp_version()
-            self._cached_ytdlp_ver = ver
-            chan_tag = "Nightly" if ver.count(".") >= 3 else "Stable"
-            if self.winfo_exists() and hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-                self.after(0, lambda: self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {ver} ({chan_tag})"))
-                if not self.cfg.get("ytdlp_channel"):
-                    self.var_ytdlp_channel.set(chan_tag.lower())
-
-        threading.Thread(target=_async_load_ver, daemon=True).start()
-
-        # Channel Selector (Stable vs Nightly)
-        chan_row = tk.Frame(ytdlp_card, bg="#282a36")
-        chan_row.pack(fill="x", pady=(0, 8))
-
-        lbl_chan = tk.Label(
-            chan_row,
-            text="Channel Rilis:",
-            font=("Segoe UI", 8, "bold"),
-            bg="#282a36",
-            fg="#cdd6f4",
-        )
-        lbl_chan.pack(side="left", padx=(0, 12))
-
-        rb_stable = tk.Radiobutton(
-            chan_row,
-            text="Stable (Rilis Stabil)",
-            variable=self.var_ytdlp_channel,
-            value="stable",
-            font=("Segoe UI", 8),
-            bg="#282a36",
-            fg="#f8f8f2",
-            selectcolor="#181825",
-            activebackground="#282a36",
-            activeforeground="#50fa7b",
-        )
-        rb_stable.pack(side="left", padx=(0, 12))
-
-        rb_nightly = tk.Radiobutton(
-            chan_row,
-            text="Nightly (Rilis Harian / Fitur Terbaru)",
-            variable=self.var_ytdlp_channel,
-            value="nightly",
-            font=("Segoe UI", 8),
-            bg="#282a36",
-            fg="#f8f8f2",
-            selectcolor="#181825",
-            activebackground="#282a36",
-            activeforeground="#bd93f9",
-        )
-        rb_nightly.pack(side="left")
-
-        # Tombol Update & Status
-        upd_action_row = tk.Frame(ytdlp_card, bg="#282a36")
+        upd_action_row = ctk.CTkFrame(p_upd, fg_color="transparent")
         upd_action_row.pack(fill="x")
 
-        self.btn_update_ytdlp = tk.Button(
+        self.btn_update_ytdlp = ctk.CTkButton(
             upd_action_row,
-            text="Perbarui yt-dlp Sekarang",
-            font=("Segoe UI", 8, "bold"),
-            bg="#bd93f9",
-            fg="#1e1e2e",
-            activebackground="#ff79c6",
-            bd=0,
-            padx=14,
-            pady=4,
-            cursor="hand2",
+            text=t("btn_update_ytdlp"),
+            font=FONT_BODY_BOLD,
+            fg_color=ACCENT_PRIMARY,
+            hover_color=ACCENT_HOVER,
+            text_color="#ffffff",
+            corner_radius=RADIUS_MD,
+            height=32,
+            width=140,
             command=self._do_update_ytdlp,
         )
         self.btn_update_ytdlp.pack(side="left", padx=(0, 10))
 
-        self.lbl_ytdlp_status = tk.Label(
+        self.lbl_ytdlp_status = ctk.CTkLabel(
             upd_action_row,
             text="Siap memeriksa pembaruan",
-            font=("Segoe UI", 8),
-            bg="#282a36",
-            fg="#a6adc8",
+            font=FONT_CAPTION,
+            text_color=TEXT_MUTED,
         )
         self.lbl_ytdlp_status.pack(side="left")
 
     def _do_update_ytdlp(self):
-        """Menjalankan proses update yt-dlp di background thread."""
-        channel = self.var_ytdlp_channel.get()
-        self.btn_update_ytdlp.config(state="disabled")
-        self.lbl_ytdlp_status.config(text=f"Sedang memeriksa/memperbarui ({channel.title()})...", fg="#bd93f9")
+        self.btn_update_ytdlp.configure(state="disabled")
+        self.lbl_ytdlp_status.configure(text="Sedang mengunduh rilis terbaru...", text_color=STATUS_INFO)
 
-        def run_upd():
+        def _worker():
+            channel = self.var_ytdlp_channel.get()
             success, status_code, msg = update_ytdlp_engine(channel=channel)
-            new_ver = get_ytdlp_version()
-            chan_tag = "Nightly" if new_ver.count(".") >= 3 else "Stable"
 
-            def done():
-                self.btn_update_ytdlp.config(state="normal")
-                self.lbl_ytdlp_ver.config(text=f"Versi Terpasang: {new_ver} ({chan_tag})")
+            def _apply():
+                self.btn_update_ytdlp.configure(state="normal")
                 if success:
-                    # Simpan preferensi channel yang aktif ke config
-                    self.cfg["ytdlp_channel"] = channel
-                    save_config(self.cfg)
-
-                    if status_code == "already_latest":
-                        self.lbl_ytdlp_status.config(text=f"Sudah versi terbaru ({new_ver})", fg="#8be9fd")
-                        show_dark_info(
-                            self,
-                            "Sudah Versi Terbaru",
-                            f"yt-dlp sudah menggunakan versi terbaru ({new_ver}) pada channel {channel.title()}.\n\nTidak ada pembaruan baru yang diperlukan.",
-                        )
-                    else:
-                        self.lbl_ytdlp_status.config(text=f"Sukses! Versi {new_ver}", fg="#50fa7b")
-                        show_dark_info(
-                            self,
-                            "Pembaruan Selesai",
-                            f"Berhasil memperbarui yt-dlp ke versi {new_ver} (Channel: {channel.title()}).",
-                        )
+                    ver = get_ytdlp_version()
+                    self.lbl_ytdlp_status.configure(text=f"Sukses diperbarui ke: {ver}", text_color=STATUS_SUCCESS)
+                    show_dark_info(self, "Pembaruan Berhasil", f"Engine yt-dlp berhasil diperbarui!\n\nVersi aktif: {ver}")
+                elif status_code == "already_latest":
+                    self.lbl_ytdlp_status.configure(text="Sudah menggunakan versi terbaru", text_color=TEXT_SECONDARY)
+                    show_dark_info(self, "Info Pembaruan", msg)
                 else:
-                    self.lbl_ytdlp_status.config(text="Gagal memperbarui", fg="#ff5555")
-                    show_dark_error(
-                        self,
-                        "Pembaruan Gagal",
-                        f"Gagal memperbarui yt-dlp:\n\n{msg}",
-                    )
+                    self.lbl_ytdlp_status.configure(text="Pembaruan gagal", text_color=STATUS_DANGER)
+                    show_dark_error(self, "Pembaruan Gagal", f"Gagal memperbarui engine yt-dlp.\n\nError: {msg}")
 
-            self.after(0, done)
+            self.after(0, _apply)
 
-        threading.Thread(target=run_upd, daemon=True).start()
+        threading.Thread(target=_worker, daemon=True).start()
 
     # ==================== TAB 3: CACHE & DATA ====================
     def _render_cache_tab(self):
-        lbl_title = tk.Label(
+        lbl_title = ctk.CTkLabel(
             self.content_container,
-            text="Penyimpanan Cache & Data",
-            font=("Segoe UI", 12, "bold"),
-            bg="#1e1e2e",
-            fg="#f8f8f2",
+            text=t("lbl_settings_cache_title"),
+            font=FONT_TITLE,
+            text_color=TEXT_PRIMARY,
             anchor="w",
         )
         lbl_title.pack(fill="x", pady=(0, 14))
 
-        stats = get_cache_size_info()
+        info = get_cache_size_info()
         histories = load_history()
 
-        # Kartu Statistik Cache
-        card_cache = tk.Frame(self.content_container, bg="#282a36", padx=14, pady=12)
-        card_cache.pack(fill="x", pady=(0, 14))
+        # Card: Statistik Cache
+        card_stats = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_stats.pack(fill="x", pady=(0, 12))
 
-        self.lbl_cover_stat = tk.Label(
-            card_cache,
-            text=f"Cache Cover Art     : {stats['covers_count']} file ({stats['covers_size']})",
-            font=("Segoe UI", 9),
-            bg="#282a36",
-            fg="#f8f8f2",
-            anchor="w",
-        )
-        self.lbl_cover_stat.pack(fill="x", pady=2)
+        p_stats = ctk.CTkFrame(card_stats, fg_color="transparent")
+        p_stats.pack(fill="x", padx=16, pady=12)
 
-        self.lbl_temp_stat = tk.Label(
-            card_cache,
-            text=f"File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})",
-            font=("Segoe UI", 9),
-            bg="#282a36",
-            fg="#f8f8f2",
-            anchor="w",
-        )
-        self.lbl_temp_stat.pack(fill="x", pady=2)
+        ctk.CTkLabel(p_stats, text="Ukuran Cache & Data Tersimpan", font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x", pady=(0, 8))
 
-        self.lbl_hist_stat = tk.Label(
-            card_cache,
-            text=f"Riwayat Unduhan      : {len(histories)} karya tersimpan",
-            font=("Segoe UI", 9),
-            bg="#282a36",
-            fg="#f8f8f2",
-            anchor="w",
-        )
-        self.lbl_hist_stat.pack(fill="x", pady=2)
+        c_count = info.get("covers_count", 0)
+        c_size = info.get("covers_size", "0 MB")
+        t_count = info.get("temp_count", 0)
+        t_size = info.get("temp_size", "0 MB")
 
-        # Tombol Aksi Pembersihan
-        btn_box = tk.Frame(self.content_container, bg="#1e1e2e")
-        btn_box.pack(fill="x", pady=4)
+        ctk.CTkLabel(p_stats, text=f"• Cache Thumbnail Cover: {c_count} file ({c_size})", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=2)
+        ctk.CTkLabel(p_stats, text=f"• Cache Berkas Sementara: {t_count} file ({t_size})", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=2)
+        ctk.CTkLabel(p_stats, text=f"• Total Riwayat Karya: {len(histories)} entri", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w").pack(fill="x", pady=2)
 
-        btn_clear_covers = tk.Button(
-            btn_box,
-            text="Bersihkan Cache Cover",
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#8be9fd",
-            activebackground="#6272a4",
-            bd=0,
-            padx=12,
-            pady=6,
-            cursor="hand2",
+        # Card: Tombol Pembersihan
+        card_actions = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_actions.pack(fill="x", pady=(0, 12))
+
+        p_act = ctk.CTkFrame(card_actions, fg_color="transparent")
+        p_act.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(p_act, text="Tindakan Pemeliharaan", font=FONT_SUBTITLE, text_color=TEXT_PRIMARY, anchor="w").pack(fill="x", pady=(0, 10))
+
+        btn_c_covers = ctk.CTkButton(
+            p_act,
+            text=t("btn_clear_covers"),
+            font=FONT_BODY,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_PRIMARY,
+            corner_radius=RADIUS_MD,
+            height=32,
             command=self._do_clear_covers,
         )
-        btn_clear_covers.pack(side="left", padx=(0, 8))
+        btn_c_covers.pack(fill="x", pady=4)
 
-        btn_clear_temp = tk.Button(
-            btn_box,
-            text="Bersihkan File Sampah",
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#50fa7b",
-            activebackground="#6272a4",
-            bd=0,
-            padx=12,
-            pady=6,
-            cursor="hand2",
+        btn_c_temp = ctk.CTkButton(
+            p_act,
+            text=t("btn_clear_temp"),
+            font=FONT_BODY,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_PRIMARY,
+            corner_radius=RADIUS_MD,
+            height=32,
             command=self._do_clear_temp,
         )
-        btn_clear_temp.pack(side="left", padx=(0, 8))
+        btn_c_temp.pack(fill="x", pady=4)
 
-        btn_clear_hist = tk.Button(
-            btn_box,
-            text="Hapus Semua Riwayat",
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#ff5555",
-            activebackground="#6272a4",
-            bd=0,
-            padx=12,
-            pady=6,
-            cursor="hand2",
+        btn_c_hist = ctk.CTkButton(
+            p_act,
+            text=t("btn_clear_all_history"),
+            font=FONT_BODY,
+            fg_color=STATUS_DANGER,
+            hover_color="#ef4444",
+            text_color="#ffffff",
+            corner_radius=RADIUS_MD,
+            height=32,
             command=self._do_clear_history,
         )
-        btn_clear_hist.pack(side="left")
+        btn_c_hist.pack(fill="x", pady=(4, 0))
 
-    # ==================== ACTIONS: CLEAR CACHE & HISTORY ====================
     def _do_clear_covers(self):
-        clear_cover_cache()
-        stats = get_cache_size_info()
-        self.lbl_cover_stat.config(text=f"🖼️ Cache Cover Art     : {stats['covers_count']} gambar ({stats['covers_size']})")
-        show_dark_info(self, "Berhasil", "Cache gambar cover art telah dibersihkan!")
+        c, s = clear_cover_cache()
+        show_dark_info(self, "Cache Dibersihkan", f"Berhasil membersihkan {c} file cover ({s:.2f} MB).")
+        self._show_tab("cache")
 
     def _do_clear_temp(self):
-        clear_temp_cache()
-        stats = get_cache_size_info()
-        self.lbl_temp_stat.config(text=f"🧹 File Sementara/Part  : {stats['temp_count']} file ({stats['temp_size']})")
-        show_dark_info(self, "Berhasil", "Semua file sementara/temp telah dibersihkan!")
+        c, s = clear_temp_cache()
+        show_dark_info(self, "Cache Dibersihkan", f"Berhasil membersihkan {c} file temp ({s:.2f} MB).")
+        self._show_tab("cache")
 
     def _do_clear_history(self):
-        if ask_dark_yesno(self, "Konfirmasi", "Apakah Anda yakin ingin menghapus seluruh riwayat unduhan? (File MP3 di folder simpan tidak akan terhapus)."):
-            clear_all_history()
-            self.lbl_hist_stat.config(text="📜 Riwayat Unduhan      : 0 karya tersimpan")
+        ans = ask_dark_yesno(
+            self,
+            "Konfirmasi Hapus",
+            "Apakah Anda yakin ingin menghapus SEMUA riwayat unduhan?\n\n(Catatan: Berkas audio di folder unduhan TIDAK akan dihapus, hanya daftar riwayat yang dibersihkan).",
+        )
+        if ans:
+            c = clear_all_history()
+            show_dark_info(self, "Riwayat Dihapus", f"Berhasil menghapus {c} catatan riwayat.")
             self.parent._load_history_view()
-            show_dark_info(self, "Berhasil", "Seluruh riwayat unduhan telah dikosongkan!")
+            self._show_tab("cache")
 
-    # ==================== TAB 4: ABOUT ====================
+    # ==================== TAB 4: TENTANG ====================
     def _render_about_tab(self):
-        card_about = tk.Frame(self.content_container, bg="#1e1e2e")
-        card_about.pack(fill="both", expand=True)
+        card_about = ctk.CTkFrame(self.content_container, corner_radius=RADIUS_LG, fg_color=SURFACE_CARD, border_width=1, border_color=BORDER_SUBTLE)
+        card_about.pack(fill="x", pady=(0, 12))
 
-        # Header About
-        top_row = tk.Frame(card_about, bg="#1e1e2e")
-        top_row.pack(fill="x", pady=(0, 10))
+        p_abt = ctk.CTkFrame(card_about, fg_color="transparent")
+        p_abt.pack(fill="x", padx=20, pady=20)
 
-        # Render Icon App jika ada
+        # App Logo & Header
         if hasattr(self.parent, "_icon_png_path") and self.parent._icon_png_path and os.path.exists(self.parent._icon_png_path):
             try:
                 with Image.open(self.parent._icon_png_path) as p_img:
                     resized = p_img.resize((64, 64), Image.Resampling.LANCZOS)
                     self._about_logo_img = ImageTk.PhotoImage(resized)
-                    lbl_logo = tk.Label(top_row, image=self._about_logo_img, bg="#1e1e2e")
-                    lbl_logo.pack(side="left", padx=(0, 14))
+                    lbl_logo = tk.Label(p_abt, image=self._about_logo_img, bg=SURFACE_CARD)
+                    lbl_logo.pack(pady=(0, 8))
             except Exception:
                 pass
 
-        title_box = tk.Frame(top_row, bg="#1e1e2e")
-        title_box.pack(side="left", fill="x")
+        ctk.CTkLabel(p_abt, text="JapaneseASMR Downloader & Audio Player", font=FONT_TITLE, text_color=TEXT_PRIMARY).pack(pady=(0, 2))
+        ctk.CTkLabel(p_abt, text="Versi 1.1.1 • Windows Pure Desktop GUI", font=FONT_CAPTION, text_color=STATUS_INFO).pack(pady=(0, 12))
 
-        lbl_app_name = tk.Label(
-            title_box,
-            text="JapaneseASMR Downloader",
-            font=("Segoe UI", 14, "bold"),
-            bg="#1e1e2e",
-            fg="#50fa7b",
-            anchor="w",
-        )
-        lbl_app_name.pack(fill="x")
-
-        lbl_version = tk.Label(
-            title_box,
-            text=t("app_version"),
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#bd93f9",
-            anchor="w",
-        )
-        lbl_version.pack(fill="x")
-
-        lbl_desc = tk.Label(
-            card_about,
-            text=t("lbl_about_desc"),
-            font=("Segoe UI", 9),
-            bg="#1e1e2e",
-            fg="#cdd6f4",
+        ctk.CTkLabel(
+            p_abt,
+            text="Aplikasi utilitas pengunduh dan pemutar audio native untuk karya suara ASMR Jepang. Dilengkapi audio player Windows Media Foundation, manajemen chapter CUE, dan metadata resolusi tinggi.",
+            font=FONT_BODY,
+            text_color=TEXT_SECONDARY,
             wraplength=480,
-            justify="left",
-            anchor="w",
-        )
-        lbl_desc.pack(fill="x", pady=(4, 12))
+            justify="center",
+        ).pack(pady=(0, 16))
 
-        # Developer & Tech Credits Card
-        credit_card = tk.Frame(card_about, bg="#282a36", padx=14, pady=10)
-        credit_card.pack(fill="x", pady=(0, 14))
+        # Links Row
+        links_row = ctk.CTkFrame(p_abt, fg_color="transparent")
+        links_row.pack(pady=(0, 8))
 
-        tk.Label(credit_card, text="👤 Pengembang : SayMaven", font=("Segoe UI", 9, "bold"), bg="#282a36", fg="#f8f8f2", anchor="w").pack(fill="x", pady=1)
-        tk.Label(credit_card, text="⚙️ Teknologi   : Python 3.14, Tkinter, FFmpeg, yt-dlp, Aria2c, Nuitka C Engine", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
-        tk.Label(credit_card, text="📜 Lisensi     : Open Source Software (Free for Personal Use)", font=("Segoe UI", 8), bg="#282a36", fg="#a6adc8", anchor="w").pack(fill="x", pady=1)
-
-        # Action Link Buttons
-        link_box = tk.Frame(card_about, bg="#1e1e2e")
-        link_box.pack(fill="x")
-
-        btn_gh = tk.Button(
-            link_box,
-            text="🌐 Buka Repository GitHub",
-            font=("Segoe UI", 9, "bold"),
-            bg="#6272a4",
-            fg="#f8f8f2",
-            activebackground="#bd93f9",
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
+        ctk.CTkButton(
+            links_row,
+            text="🌐 Repositori GitHub",
+            font=FONT_BODY_BOLD,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_PRIMARY,
+            corner_radius=RADIUS_MD,
+            height=32,
             command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl"),
-        )
-        btn_gh.pack(side="left", padx=(0, 10))
+        ).pack(side="left", padx=6)
 
-        btn_issue = tk.Button(
-            link_box,
-            text="🐛 Laporkan Bug / Fitur",
-            font=("Segoe UI", 9),
-            bg="#44475a",
-            fg="#8be9fd",
-            activebackground="#6272a4",
-            bd=0,
-            padx=14,
-            pady=6,
-            cursor="hand2",
+        ctk.CTkButton(
+            links_row,
+            text="🐛 Lapor Masalah (Issues)",
+            font=FONT_BODY,
+            fg_color=SURFACE_ELEVATED,
+            hover_color=BORDER_ACTIVE,
+            text_color=TEXT_SECONDARY,
+            corner_radius=RADIUS_MD,
+            height=32,
             command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl/issues"),
-        )
-        btn_issue.pack(side="left")
+        ).pack(side="left", padx=6)
 
-    # ==================== SIMPAN PENGATURAN ====================
+    # ==================== SIMPAN & KELUAR ====================
     def _save_settings(self):
-        new_dir = self.var_download_dir.get().strip()
-        if not new_dir:
-            show_dark_warning(self, t("msg_error_title"), "Lokasi folder download tidak boleh kosong.")
-            return
+        new_lang = self.var_language.get()
+        old_lang = get_active_language()
 
-        lang_val = self.var_language.get()
-        self.cfg["language"] = lang_val
-        self.cfg["download_dir"] = new_dir
+        self.cfg["language"] = new_lang
+        self.cfg["download_dir"] = self.var_download_dir.get()
         self.cfg["use_detailed_filename"] = self.var_detailed_name.get()
         self.cfg["notify_popup"] = self.var_notify_popup.get()
         self.cfg["auto_clipboard"] = self.var_auto_clipboard.get()
-        self.cfg["connections"] = max(1, min(32, self.var_connections.get()))
+        self.cfg["connections"] = self.var_connections.get()
         self.cfg["ytdlp_channel"] = self.var_ytdlp_channel.get()
         self.cfg["audio_format"] = self.var_audio_format.get()
 
         save_config(self.cfg)
-        set_active_language(lang_val)
-        set_download_dir(new_dir)
+        set_download_dir(self.var_download_dir.get())
         set_audio_format(self.var_audio_format.get())
 
-        # Sinkronisasi ke GUI utama
-        self.parent.opt_detailed_name.set(self.cfg["use_detailed_filename"])
+        if hasattr(self.parent, "opt_detailed_name"):
+            self.parent.opt_detailed_name.set(self.var_detailed_name.get())
         if hasattr(self.parent, "var_auto_clipboard"):
-            self.parent.var_auto_clipboard.set(self.cfg["auto_clipboard"])
-        self.parent.config = dict(self.cfg)
-        self.parent.lbl_current_dir.config(text=t("lbl_save_location", path=os.path.abspath(new_dir)))
-        if hasattr(self.parent, "_refresh_playlist_view"):
-            self.parent._refresh_playlist_view()
+            self.parent.var_auto_clipboard.set(self.var_auto_clipboard.get())
 
-        # Dynamic In-Place UI Re-render seketika!
-        if hasattr(self.parent, "retranslate_ui"):
-            self.parent.retranslate_ui()
+        if new_lang != old_lang:
+            set_active_language(new_lang)
+            if hasattr(self.parent, "retranslate_ui"):
+                self.parent.retranslate_ui()
 
-        show_dark_info(self, t("msg_info_title"), t("msg_settings_saved"))
+        show_dark_info(self, "Pengaturan Disimpan", t("msg_saved_success"))
         self._on_dialog_close()
 
     def _on_dialog_close(self):
