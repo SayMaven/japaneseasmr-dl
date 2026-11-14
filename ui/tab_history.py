@@ -404,10 +404,7 @@ class HistoryTabMixin:
                     pil_img.thumbnail((290, 195))
                     os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
                     pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
-                    try:
-                        self.after(0, lambda: _apply_online_cover(pil_img))
-                    except Exception:
-                        pass
+                    self.after(0, lambda: _apply_online_cover(pil_img))
                 except Exception:
                     pass
 

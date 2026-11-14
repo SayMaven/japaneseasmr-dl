@@ -14,7 +14,6 @@ import customtkinter as ctk
 from PIL import Image, ImageTk
 
 from config_manager import (
-    discover_all_audio_tracks,
     extract_chapters_from_audio,
     fetch_japaneseasmr_chapters,
     get_bin_executable,
@@ -443,41 +442,150 @@ class PlayerTabMixin:
             pass
 
     def _refresh_playlist_view(self):
+        """
+        Memuat ulang daftar audio yang tersedia di riwayat serta memindai
+        seluruh isi folder penyimpanan unduhan secara rekursif (termasuk semua subfolder).
+        """
+        if hasattr(self, "_chapters_cache"):
+            self._chapters_cache.clear()
         self.player_tree.delete(*self.player_tree.get_children())
         self.playlist_items = []
-        d_dir = get_download_dir()
-        tracks = discover_all_audio_tracks(d_dir)
+        seen_paths = set()
+
         histories = load_history()
-        hist_map = {h.get("output_path", ""): h for h in histories if "output_path" in h}
+        hist_by_rjid = {}
+        hist_by_path = {}
 
-        for idx, tr in enumerate(tracks):
-            fpath = tr.get("path", "")
-            meta = hist_map.get(fpath, {})
-            rjid = meta.get("rjid", "")
-            if not rjid:
-                m = re.search(r"(RJ\d{6,8})", fpath, re.IGNORECASE)
-                if m:
-                    rjid = m.group(1).upper()
-            title = meta.get("title", tr.get("filename", ""))
-            cv = meta.get("cv", "-")
-            sz = tr.get("size", 0)
-            sz_str = f"{sz / (1024 * 1024):.1f} MB" if sz > 0 else "-"
+        for h in histories:
+            r_id = h.get("rjid", "").strip().upper()
+            if r_id and r_id != "-":
+                hist_by_rjid[r_id] = h
+            out_p = h.get("output_path", "")
+            if out_p:
+                hist_by_path[os.path.normcase(os.path.abspath(out_p))] = h
 
-            item = {
-                "rjid": rjid,
-                "title": title,
-                "cv": cv,
-                "output_path": fpath,
-                "size_str": sz_str,
-                "cover_url": meta.get("cover_url", ""),
-            }
-            self.playlist_items.append(item)
-            dur_str = sz_str
+        # 1. Masukkan berkas dari riwayat yang berkas fisiknya masih ada di disk
+        for h in histories:
+            fpath = h.get("output_path", "")
+            if fpath and os.path.exists(fpath):
+                norm_p = os.path.normcase(os.path.abspath(fpath))
+                if norm_p not in seen_paths:
+                    seen_paths.add(norm_p)
+                    try:
+                        fsize = os.path.getsize(fpath)
+                        sz_str = f"{fsize / (1024 * 1024 * 1024):.2f} GB" if fsize >= 1024**3 else f"{fsize / (1024 * 1024):.1f} MB"
+                    except OSError:
+                        sz_str = "-"
+
+                    item = {
+                        "rjid": h.get("rjid", "-"),
+                        "title": h.get("title", os.path.basename(fpath)),
+                        "cv": h.get("cv", "-"),
+                        "circle": h.get("circle", "-"),
+                        "file_size": sz_str,
+                        "output_path": os.path.abspath(fpath),
+                        "cover_url": h.get("cover_url", ""),
+                    }
+                    self.playlist_items.append(item)
+
+        # 2. Pindai folder download secara rekursif untuk mendeteksi file audio
+        download_dir = os.path.abspath(get_download_dir())
+        AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".wma"}
+
+        if os.path.exists(download_dir):
+            for root, dirs, files in os.walk(download_dir, followlinks=False):
+                # Lewati direktori sistem / cache / temp / recycle bin
+                dirs[:] = [
+                    d for d in dirs
+                    if not d.startswith(".")
+                    and not d.startswith("temp_")
+                    and d.lower() not in {"$recycle.bin", "system volume information"}
+                ]
+
+                # Cari gambar cover lokal jika ada di subfolder yang sama
+                local_cover = None
+                img_candidates = [
+                    f for f in files
+                    if os.path.splitext(f)[1].lower() in {".jpg", ".jpeg", ".png", ".webp"}
+                ]
+                if img_candidates:
+                    pref_covers = [
+                        f for f in img_candidates
+                        if any(k in f.lower() for k in ["cover", "folder", "thumb", "main", "img", "front"])
+                    ]
+                    chosen_img = pref_covers[0] if pref_covers else img_candidates[0]
+                    local_cover = os.path.abspath(os.path.join(root, chosen_img))
+
+                for f in sorted(files):
+                    ext = os.path.splitext(f)[1].lower()
+                    if ext in AUDIO_EXTS:
+                        full_path = os.path.abspath(os.path.join(root, f))
+                        norm_p = os.path.normcase(full_path)
+                        if norm_p in seen_paths:
+                            continue
+                        seen_paths.add(norm_p)
+
+                        # Deteksi ID RJ dari nama berkas atau nama subfolder
+                        match = re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", f, re.IGNORECASE)
+                        if not match:
+                            match = re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", os.path.basename(root), re.IGNORECASE)
+
+                        rjid_detected = match.group(1).upper() if match else "-"
+                        ref_meta = hist_by_path.get(norm_p) or (hist_by_rjid.get(rjid_detected) if rjid_detected != "-" else None)
+
+                        # Hitung ukuran berkas
+                        try:
+                            fsize = os.path.getsize(full_path)
+                            if fsize >= 1024 * 1024 * 1024:
+                                size_str = f"{fsize / (1024 * 1024 * 1024):.2f} GB"
+                            else:
+                                size_str = f"{fsize / (1024 * 1024):.1f} MB"
+                        except OSError:
+                            size_str = "-"
+
+                        # Judul karya
+                        base_name_no_ext = os.path.splitext(f)[0]
+                        clean_name = re.sub(r"^\[(?:RJ|VJ|BJ)\d+\]\s*", "", base_name_no_ext).strip()
+                        rel_sub = os.path.relpath(root, download_dir)
+                        if rel_sub != "." and not clean_name.lower().startswith(rel_sub.lower()):
+                            title_display = f"{clean_name} ({rel_sub})"
+                        else:
+                            title_display = clean_name or base_name_no_ext
+
+                        if ref_meta and ref_meta.get("title"):
+                            title_to_use = ref_meta.get("title")
+                        else:
+                            title_to_use = title_display
+
+                        cv_display = ref_meta.get("cv", "-") if ref_meta else "-"
+                        circle_display = ref_meta.get("circle", "-") if ref_meta else "-"
+                        cover_to_use = local_cover or (ref_meta.get("cover_url", "") if ref_meta else "")
+                        if not cover_to_use and rjid_detected != "-":
+                            cover_to_use = f"https://pic.weeabo0.xyz/{rjid_detected}_img_main.jpg"
+
+                        item = {
+                            "rjid": rjid_detected,
+                            "title": title_to_use,
+                            "cv": cv_display,
+                            "circle": circle_display,
+                            "file_size": size_str,
+                            "output_path": full_path,
+                            "cover_url": cover_to_use,
+                        }
+                        self.playlist_items.append(item)
+
+        # Masukkan seluruh item ke Treeview Playlist
+        for idx, item in enumerate(self.playlist_items):
             self.player_tree.insert(
                 "",
                 "end",
                 iid=str(idx),
-                values=(item.get("rjid", "-"), item.get("title", "-"), item.get("cv", "-"), dur_str),
+                values=(
+                    item.get("rjid", "-"),
+                    item.get("title", "-"),
+                    item.get("cv", "-"),
+                    item.get("file_size", "-"),
+                ),
             )
 
         if hasattr(self, "lbl_p_title"):
@@ -587,7 +695,7 @@ class PlayerTabMixin:
 
     def _render_player_cover(self, cover_cand):
         rjid = self.current_playing_meta.get("rjid", "")
-        cache_file = os.path.join(".cache", "covers", f"{rjid}.jpg") if rjid else ""
+        cache_file = os.path.join(".cache", "covers", f"{rjid}.jpg") if rjid and rjid != "-" else ""
         if cache_file and os.path.exists(cache_file):
             try:
                 pil_img = Image.open(cache_file)
@@ -600,6 +708,19 @@ class PlayerTabMixin:
                 pass
 
         if cover_cand:
+            # 1. Cek apakah cover_cand adalah berkas lokal di disk
+            if os.path.isfile(cover_cand):
+                try:
+                    pil_img = Image.open(cover_cand)
+                    pil_img.thumbnail((290, 185))
+                    self.player_preview_image = ImageTk.PhotoImage(pil_img)
+                    self.player_canvas.delete("all")
+                    self.player_canvas.create_image(145, 92, image=self.player_preview_image)
+                    return
+                except Exception:
+                    pass
+
+            # 2. Jika merupakan URL web (HTTP/HTTPS)
             def _apply_player_cover(p_img):
                 try:
                     if hasattr(self, "player_canvas") and self.player_canvas.winfo_exists():
@@ -619,10 +740,7 @@ class PlayerTabMixin:
                     if cache_file:
                         os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
                         pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
-                    try:
-                        self.after(0, lambda: _apply_player_cover(pil_img))
-                    except Exception:
-                        pass
+                    self.after(0, lambda: _apply_player_cover(pil_img))
                 except Exception:
                     pass
             threading.Thread(target=_load_c, daemon=True).start()

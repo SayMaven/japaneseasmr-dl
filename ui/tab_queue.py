@@ -162,7 +162,6 @@ class QueueTabMixin:
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        self.queue_card.pack(fill="both", expand=True, pady=(0, SPACE_MD))
 
         # Action Buttons Header
         queue_actions = ctk.CTkFrame(self.queue_card, fg_color="transparent")
@@ -260,7 +259,6 @@ class QueueTabMixin:
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        progress_card.pack(fill="x", pady=(0, SPACE_MD))
 
         p_info_row = ctk.CTkFrame(progress_card, fg_color="transparent")
         p_info_row.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_SM // 2))
@@ -327,7 +325,6 @@ class QueueTabMixin:
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        log_card.pack(fill="x")
 
         log_header = ctk.CTkFrame(log_card, fg_color="transparent")
         log_header.pack(fill="x", padx=SPACE_MD, pady=(SPACE_SM, 2))
@@ -341,9 +338,12 @@ class QueueTabMixin:
         )
         self.lbl_log_header.pack(side="left")
 
+        log_inner = ctk.CTkFrame(log_card, fg_color="transparent")
+        log_inner.pack(fill="both", expand=True, padx=SPACE_SM, pady=(2, SPACE_SM))
+
         self.log_text = tk.Text(
-            log_card,
-            height=4,
+            log_inner,
+            height=6,
             bg=SURFACE_INPUT,
             fg=TEXT_SECONDARY,
             font=FONT_CODE,
@@ -352,7 +352,15 @@ class QueueTabMixin:
             insertbackground=ACCENT_PRIMARY,
             relief="flat",
         )
-        self.log_text.pack(fill="both", expand=True, padx=SPACE_SM, pady=(2, SPACE_SM))
+        log_scroll = ttk.Scrollbar(log_inner, orient="vertical", command=self.log_text.yview, style="Vertical.TScrollbar")
+        self.log_text.configure(yscrollcommand=log_scroll.set)
+        self.log_text.pack(side="left", fill="both", expand=True)
+        log_scroll.pack(side="right", fill="y")
+
+        # Susun panel kiri: Elemen bawah dipack lebih dulu agar tinggi minimumnya terjamin
+        log_card.pack(side="bottom", fill="x")
+        progress_card.pack(side="bottom", fill="x", pady=(0, SPACE_MD))
+        self.queue_card.pack(side="top", fill="both", expand=True, pady=(0, SPACE_MD))
 
         # Panel Kanan: Preview Thumbnail & Info Card
         self.right_panel = ctk.CTkFrame(

@@ -216,7 +216,7 @@ class JapaneseASMRApp(
         # Master Layout: Sidebar Navigasi Kiri (Docked corner_radius=0) + Content Viewport Kanan
         self.sidebar = ctk.CTkFrame(
             self,
-            width=230,
+            width=240,
             corner_radius=RADIUS_SIDEBAR,
             fg_color=BG_SIDEBAR,
             border_width=1,
@@ -303,7 +303,7 @@ class JapaneseASMRApp(
 
         self.btn_nav_settings = ctk.CTkButton(
             self.sidebar,
-            text=f"  {t('settings_title')}",
+            text=f"  {t('btn_settings')}",
             image=get_icon("settings", size=(18, 18)),
             font=FONT_BODY_BOLD,
             anchor="w",
@@ -343,17 +343,14 @@ class JapaneseASMRApp(
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
             anchor="w",
-            wraplength=180,
+            wraplength=190,
             justify="left",
         )
         self.lbl_current_dir.pack(fill="x", pady=(0, 6))
 
-        btn_dir_row = ctk.CTkFrame(dir_inner, fg_color="transparent")
-        btn_dir_row.pack(fill="x")
-
         self.btn_open_folder = ctk.CTkButton(
-            btn_dir_row,
-            text=t("btn_open_folder"),
+            dir_inner,
+            text=f" {t('btn_open_folder')}",
             image=get_icon("folder", size=(14, 14)),
             font=FONT_CAPTION,
             fg_color=SURFACE_ELEVATED,
@@ -361,14 +358,14 @@ class JapaneseASMRApp(
             text_color=TEXT_PRIMARY,
             corner_radius=RADIUS_BUTTON,
             height=28,
-            width=84,
+            anchor="center",
             command=self._open_downloads_folder,
         )
-        self.btn_open_folder.pack(side="left", padx=(0, SPACE_XS))
+        self.btn_open_folder.pack(fill="x", pady=(0, 4))
 
         self.btn_change_dir = ctk.CTkButton(
-            btn_dir_row,
-            text=t("btn_change_dir"),
+            dir_inner,
+            text=f" {t('btn_change_dir')}",
             image=get_icon("folder", size=(14, 14)),
             font=FONT_CAPTION,
             fg_color=SURFACE_ELEVATED,
@@ -376,10 +373,10 @@ class JapaneseASMRApp(
             text_color=TEXT_PRIMARY,
             corner_radius=RADIUS_BUTTON,
             height=28,
-            width=84,
+            anchor="center",
             command=self._change_download_dir,
         )
-        self.btn_change_dir.pack(side="left")
+        self.btn_change_dir.pack(fill="x")
 
         # 4. Viewport Konten Utama (Kanan)
         self.viewport = ctk.CTkFrame(self, fg_color=BG_VIEWPORT, corner_radius=0)
@@ -460,12 +457,12 @@ class JapaneseASMRApp(
         if hasattr(self, "btn_nav_player"):
             self.btn_nav_player.configure(text=f"  {t('tab_player')}")
         if hasattr(self, "btn_nav_settings"):
-            self.btn_nav_settings.configure(text=f"  {t('settings_title')}")
+            self.btn_nav_settings.configure(text=f"  {t('btn_settings')}")
 
         if hasattr(self, "btn_open_folder"):
-            self.btn_open_folder.configure(text=t("btn_open_folder"))
+            self.btn_open_folder.configure(text=f" {t('btn_open_folder')}")
         if hasattr(self, "btn_change_dir"):
-            self.btn_change_dir.configure(text=t("btn_change_dir"))
+            self.btn_change_dir.configure(text=f" {t('btn_change_dir')}")
         if hasattr(self, "lbl_current_dir"):
             cur_dir = os.path.abspath(get_download_dir())
             self.lbl_current_dir.configure(text=t("lbl_save_location", path=cur_dir))

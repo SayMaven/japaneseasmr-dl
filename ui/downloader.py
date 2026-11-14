@@ -1,6 +1,5 @@
 import io
 import os
-import queue
 import re
 import subprocess
 import sys
@@ -34,69 +33,38 @@ from ui.constants import (
     USER_AGENT,
 )
 from ui.dialogs import show_dark_error, show_dark_info, show_dark_warning
+from ui.toast import show_toast
 
 
 class DownloadWorkerMixin:
     """Mixin untuk mengelola proses download latar belakang, status progress, dan penghentian tugas."""
     def _update_progress(self, val_pct, status_text=None, speed=None, eta=None, size_str=None):
-        if not hasattr(self, "_ui_queue"):
-            self._ui_queue = queue.Queue()
-        self._ui_queue.put(("progress", (val_pct, status_text, speed, eta, size_str)))
-
-    def _poll_download_ui_queue(self):
-        """Polling queue dari thread utama untuk sinkronisasi antarmuka secara 100% thread-safe."""
-        try:
-            while hasattr(self, "_ui_queue") and not self._ui_queue.empty():
-                kind, data = self._ui_queue.get_nowait()
-                if kind == "progress":
-                    val_pct, status_text, speed, eta, size_str = data
-                    clamped = max(0.0, min(100.0, float(val_pct)))
-                    if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
-                        if hasattr(self.progress_bar, "set"):
-                            self.progress_bar.set(clamped / 100.0)
-                        else:
-                            self.progress_bar["value"] = clamped
-                    if hasattr(self, "lbl_progress_pct") and self.lbl_progress_pct.winfo_exists():
-                        self.lbl_progress_pct.configure(text=f"{int(clamped)}%")
-                    if status_text and hasattr(self, "lbl_progress_status") and self.lbl_progress_status.winfo_exists():
-                        self.lbl_progress_status.configure(text=f"Status: {status_text}")
-                    if speed is not None and hasattr(self, "lbl_progress_speed") and self.lbl_progress_speed.winfo_exists():
-                        self.lbl_progress_speed.configure(text=speed)
-                    if eta is not None and hasattr(self, "lbl_progress_eta") and self.lbl_progress_eta.winfo_exists():
-                        self.lbl_progress_eta.configure(text=eta)
-                    if size_str is not None and hasattr(self, "lbl_progress_size") and self.lbl_progress_size.winfo_exists():
-                        self.lbl_progress_size.configure(text=size_str)
-                elif kind == "finish_buttons":
-                    if hasattr(self, "start_btn") and self.start_btn.winfo_exists():
-                        self.start_btn.configure(state="normal")
-                    if hasattr(self, "stop_btn") and self.stop_btn.winfo_exists():
-                        self.stop_btn.configure(state="disabled")
-                elif kind == "tree_select":
-                    if hasattr(self, "tree") and self.tree.winfo_exists():
-                        try:
-                            self.tree.selection_set(str(data))
-                        except Exception:
-                            pass
-                elif kind == "download_done_dialog":
-                    show_dark_info(self, "Selesai", "Semua proses unduhan dalam antrean telah selesai!")
-                elif kind == "tree_status":
-                    idx, status = data
-                    if hasattr(self, "tree") and self.tree.winfo_exists():
-                        self.tree.set(str(idx), "status", status)
-                elif kind == "load_history":
-                    if hasattr(self, "_load_history_view"):
-                        self._load_history_view()
-                elif kind == "refresh_playlist":
-                    if hasattr(self, "_refresh_playlist_view"):
-                        self._refresh_playlist_view()
-        except Exception:
-            pass
-
-        if getattr(self, "is_downloading", False) or (hasattr(self, "_ui_queue") and not self._ui_queue.empty()):
+        def _apply():
             try:
-                self.after(50, self._poll_download_ui_queue)
+                if not self.winfo_exists():
+                    return
+                clamped = max(0.0, min(100.0, float(val_pct)))
+                if hasattr(self, "progress_bar") and self.progress_bar.winfo_exists():
+                    if hasattr(self.progress_bar, "set"):
+                        self.progress_bar.set(clamped / 100.0)
+                    else:
+                        self.progress_bar["value"] = clamped
+                if hasattr(self, "lbl_progress_pct") and self.lbl_progress_pct.winfo_exists():
+                    self.lbl_progress_pct.configure(text=f"{int(clamped)}%")
+                if status_text and hasattr(self, "lbl_progress_status") and self.lbl_progress_status.winfo_exists():
+                    self.lbl_progress_status.configure(text=f"Status: {status_text}")
+                if speed is not None and hasattr(self, "lbl_progress_speed") and self.lbl_progress_speed.winfo_exists():
+                    self.lbl_progress_speed.configure(text=speed)
+                if eta is not None and hasattr(self, "lbl_progress_eta") and self.lbl_progress_eta.winfo_exists():
+                    self.lbl_progress_eta.configure(text=eta)
+                if size_str is not None and hasattr(self, "lbl_progress_size") and self.lbl_progress_size.winfo_exists():
+                    self.lbl_progress_size.configure(text=size_str)
             except Exception:
                 pass
+        try:
+            self.after(0, _apply)
+        except Exception:
+            pass
 
     def _start_download_thread(self):
         if self.is_downloading:
@@ -105,7 +73,6 @@ class DownloadWorkerMixin:
             show_dark_info(self, "Informasi", "Silakan tambahkan kode RJ ke antrean terlebih dahulu.")
             return
 
-        self._ui_queue = queue.Queue()
         self.is_downloading = True
         self.stop_requested = False
         if hasattr(self, "start_btn") and self.start_btn.winfo_exists():
@@ -113,15 +80,7 @@ class DownloadWorkerMixin:
         if hasattr(self, "stop_btn") and self.stop_btn.winfo_exists():
             self.stop_btn.configure(state="normal")
 
-        use_detailed = False
-        if hasattr(self, "opt_detailed_name"):
-            try:
-                use_detailed = bool(self.opt_detailed_name.get())
-            except Exception:
-                pass
-
-        threading.Thread(target=self._download_worker, args=(use_detailed,), daemon=True).start()
-        self._poll_download_ui_queue()
+        threading.Thread(target=self._download_worker, daemon=True).start()
 
     def _stop_downloads(self):
         self.stop_requested = True
@@ -169,7 +128,7 @@ class DownloadWorkerMixin:
 
         self._update_progress(0, "Download Dihentikan")
 
-    def _download_worker(self, use_detailed=False):
+    def _download_worker(self):
         download_dir = get_download_dir()
         os.makedirs(download_dir, exist_ok=True)
         total_items = len(self.queue_items)
@@ -191,7 +150,7 @@ class DownloadWorkerMixin:
 
             # Nama File Output & Cek apakah sudah pernah diunduh
             configured_fmt = get_audio_format()
-            clean_title = sanitize_filename(title) if (use_detailed and title and title != "Memuat info..." and title != rjid) else ""
+            clean_title = sanitize_filename(title) if (self.opt_detailed_name.get() and title and title != "Memuat info..." and title != rjid) else ""
             base_fname = f"[{rjid}] {clean_title}" if clean_title else rjid
 
             if configured_fmt == "auto":
@@ -208,16 +167,14 @@ class DownloadWorkerMixin:
             if existing_file:
                 self._log(f"[SKIP] File '{os.path.basename(existing_file)}' sudah ada.")
                 item["status"] = "Selesai"
-                if hasattr(self, "_ui_queue"):
-                    self._ui_queue.put(("tree_status", (idx, "Selesai (Ada)")))
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai (Ada)"))
                 self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Sudah Ada)")
                 continue
 
             # Update status ke downloading
             item["status"] = "Downloading"
-            if hasattr(self, "_ui_queue"):
-                self._ui_queue.put(("tree_status", (idx, "Mengunduh...")))
-                self._ui_queue.put(("tree_select", idx))
+            self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Mengunduh..."))
+            self.after(0, lambda i=idx: self.tree.selection_set(str(i)))
 
             cover_url = item.get("cover_url")
             if not cover_url or "weeabo" in cover_url:
@@ -237,13 +194,6 @@ class DownloadWorkerMixin:
                 self._update_progress(base_pct + item_step * 0.05, f"[{idx+1}/{total_items}] Memindai track audio...")
                 self._log("[0/3] Mendeteksi jumlah track audio...")
                 tracks = discover_all_audio_tracks(rjid, REFERER, USER_AGENT)
-                if not tracks:
-                    self._log(f"[X] Tidak ada track audio ditemukan untuk {rjid}.")
-                    item["status"] = "Error"
-                    if hasattr(self, "_ui_queue"):
-                        self._ui_queue.put(("tree_status", (idx, "Error")))
-                    continue
-
                 track_names = [t["name"] for t in tracks]
                 source_type = tracks[0].get("source", "japaneseasmr") if tracks else "japaneseasmr"
                 if source_type == "asmr.one":
@@ -365,10 +315,7 @@ class DownloadWorkerMixin:
 
                         if attempt_idx > 1:
                             self._log(f"  [i] Mengulang pengunduhan {t_name} (Percobaan {attempt_idx}/{max_track_attempts})...")
-                            for _ in range(20):
-                                if self.stop_requested:
-                                    break
-                                time.sleep(0.1)
+                            time.sleep(2)
 
                         cmd_ytdlp = [
                             ytdlp_bin,
@@ -558,9 +505,8 @@ class DownloadWorkerMixin:
                 )
 
                 item["status"] = "Selesai"
-                if hasattr(self, "_ui_queue"):
-                    self._ui_queue.put(("tree_status", (idx, "Selesai")))
-                    self._ui_queue.put(("load_history", None))
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai"))
+                self.after(0, self._load_history_view)
                 self._update_progress(
                     (idx + 1) * item_step,
                     f"[{idx+1}/{total_items}] Selesai {rjid}",
@@ -571,15 +517,13 @@ class DownloadWorkerMixin:
                 self._log(f"[OK] SUKSES: Tersimpan di {os.path.basename(final_output)}")
                 norm_out = os.path.normcase(os.path.abspath(final_output))
                 self._chapters_cache.pop(norm_out, None)
-                if hasattr(self, "_ui_queue"):
-                    self._ui_queue.put(("refresh_playlist", None))
+                self.after(0, self._refresh_playlist_view)
 
             except Exception as e:
                 if self.stop_requested:
                     break
                 item["status"] = "Error"
-                if hasattr(self, "_ui_queue"):
-                    self._ui_queue.put(("tree_status", (idx, "Error")))
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Error"))
                 self._log(f"[X] Gagal memproses {rjid}: {e}")
 
             finally:
@@ -593,8 +537,19 @@ class DownloadWorkerMixin:
         self.is_downloading = False
         self.current_process = None
 
-        if hasattr(self, "_ui_queue"):
-            self._ui_queue.put(("finish_buttons", None))
+        def _finish_buttons():
+            try:
+                if hasattr(self, "start_btn") and self.start_btn.winfo_exists():
+                    self.start_btn.configure(state="normal")
+                if hasattr(self, "stop_btn") and self.stop_btn.winfo_exists():
+                    self.stop_btn.configure(state="disabled")
+            except Exception:
+                pass
+
+        try:
+            self.after(0, _finish_buttons)
+        except Exception:
+            pass
 
         if self.stop_requested:
             self._log("[!] Semua proses download telah dihentikan.")
@@ -609,8 +564,7 @@ class DownloadWorkerMixin:
             for idx, item in enumerate(self.queue_items):
                 if item["status"] == "Downloading":
                     item["status"] = "Pending"
-                    if hasattr(self, "_ui_queue"):
-                        self._ui_queue.put(("tree_status", (idx, "Pending")))
+                    self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Pending"))
         else:
             self._update_progress(
                 100,
@@ -620,5 +574,14 @@ class DownloadWorkerMixin:
                 size_str="Ukuran: Selesai",
             )
             self._log("\n--- Semua proses download dalam antrean selesai ---")
-            if hasattr(self, "_ui_queue"):
-                self._ui_queue.put(("download_done_dialog", None))
+            if self.cfg.get("notify_popup", True):
+                self.after(
+                    0,
+                    lambda: show_toast(
+                        self,
+                        title=t("msg_download_complete"),
+                        message=t("msg_queue_finished"),
+                        toast_type="success",
+                        duration_ms=4500,
+                    ),
+                )
