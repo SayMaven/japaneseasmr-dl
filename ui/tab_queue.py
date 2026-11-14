@@ -24,20 +24,26 @@ from ui.dialogs import (
     show_dark_info,
     show_dark_warning,
 )
+from ui.icons import get_icon
 from ui.theme import (
     ACCENT_HOVER,
     ACCENT_PRIMARY,
-    BG_APP,
+    BG_VIEWPORT,
     BORDER_ACTIVE,
     BORDER_SUBTLE,
     FONT_BODY,
     FONT_BODY_BOLD,
     FONT_CAPTION,
     FONT_CODE,
+    FONT_SECTION,
     FONT_SUBTITLE,
-    RADIUS_LG,
-    RADIUS_MD,
-    RADIUS_SM,
+    RADIUS_BUTTON,
+    RADIUS_CARD,
+    RADIUS_INPUT,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XL,
     STATUS_DANGER,
     STATUS_INFO,
     STATUS_SUCCESS,
@@ -52,7 +58,7 @@ from ui.theme import (
 
 
 class QueueTabMixin:
-    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Antrean (Queue)."""
+    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Antrean (Queue) v1.2.0."""
     def _build_queue_tab(self):
         container = self.tab_queue
 
@@ -61,77 +67,79 @@ class QueueTabMixin:
         main_container.pack(fill="both", expand=True)
 
         left_panel = ctk.CTkFrame(main_container, fg_color="transparent")
-        left_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        left_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
         # 1. Baris Input & Tombol Tambah (Modern Card)
         self.input_card = ctk.CTkFrame(
             left_panel,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        self.input_card.pack(fill="x", pady=(0, 10), padx=0)
+        self.input_card.pack(fill="x", pady=(0, SPACE_MD), padx=0)
 
         input_header = ctk.CTkFrame(self.input_card, fg_color="transparent")
-        input_header.pack(fill="x", padx=14, pady=(10, 4))
+        input_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
 
         self.lbl_input_title = ctk.CTkLabel(
             input_header,
             text=t("lbl_input_group"),
-            font=FONT_SUBTITLE,
+            font=FONT_SECTION,
             text_color=TEXT_PRIMARY,
             anchor="w",
         )
         self.lbl_input_title.pack(side="left")
 
         input_row = ctk.CTkFrame(self.input_card, fg_color="transparent")
-        input_row.pack(fill="x", padx=14, pady=(2, 6))
+        input_row.pack(fill="x", padx=SPACE_LG, pady=(2, SPACE_SM))
 
         self.id_entry = ctk.CTkEntry(
             input_row,
             placeholder_text=f"Misal: {self.placeholder_text} atau https://...",
             font=FONT_CODE,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_INPUT,
             fg_color=SURFACE_INPUT,
             border_width=1,
             border_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
-            height=36,
+            height=38,
         )
-        self.id_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.id_entry.pack(side="left", fill="x", expand=True, padx=(0, SPACE_SM))
         self.id_entry.bind("<Return>", lambda e: self._add_to_queue())
 
         self.paste_btn = ctk.CTkButton(
             input_row,
-            text=f"📋 {t('btn_paste')}",
+            text=f" {t('btn_paste')}",
+            image=get_icon("clipboard", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=SURFACE_ELEVATED,
             hover_color=BORDER_ACTIVE,
             text_color=TEXT_PRIMARY,
-            corner_radius=RADIUS_MD,
-            height=36,
-            width=90,
+            corner_radius=RADIUS_BUTTON,
+            height=38,
+            width=100,
             command=self._paste_from_clipboard,
         )
-        self.paste_btn.pack(side="left", padx=(0, 8))
+        self.paste_btn.pack(side="left", padx=(0, SPACE_SM))
 
         self.add_btn = ctk.CTkButton(
             input_row,
-            text=f"➕ {t('btn_add_queue')}",
+            text=f" {t('btn_add_queue')}",
+            image=get_icon("plus", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=ACCENT_PRIMARY,
             hover_color=ACCENT_HOVER,
             text_color="#ffffff",
-            corner_radius=RADIUS_MD,
-            height=36,
+            corner_radius=RADIUS_BUTTON,
+            height=38,
             width=140,
             command=self._add_to_queue,
         )
         self.add_btn.pack(side="right")
 
         opts_row = ctk.CTkFrame(self.input_card, fg_color="transparent")
-        opts_row.pack(fill="x", padx=14, pady=(0, 10))
+        opts_row.pack(fill="x", padx=SPACE_LG, pady=(0, SPACE_MD))
 
         self.chk_name = ctk.CTkCheckBox(
             opts_row,
@@ -140,7 +148,7 @@ class QueueTabMixin:
             command=self._save_options,
             font=FONT_CAPTION,
             text_color=TEXT_SECONDARY,
-            corner_radius=RADIUS_SM,
+            corner_radius=RADIUS_BUTTON,
             fg_color=ACCENT_PRIMARY,
             hover_color=ACCENT_HOVER,
         )
@@ -149,65 +157,68 @@ class QueueTabMixin:
         # 2. Tabel Antrean & Kontrol Aksi (Modern Card)
         self.queue_card = ctk.CTkFrame(
             left_panel,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        self.queue_card.pack(fill="both", expand=True, pady=(0, 10))
+        self.queue_card.pack(fill="both", expand=True, pady=(0, SPACE_MD))
 
         # Action Buttons Header
         queue_actions = ctk.CTkFrame(self.queue_card, fg_color="transparent")
-        queue_actions.pack(fill="x", padx=14, pady=(12, 8))
+        queue_actions.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
 
         self.lbl_queue_heading = ctk.CTkLabel(
             queue_actions,
             text=t("tab_queue"),
-            font=FONT_SUBTITLE,
+            font=FONT_SECTION,
             text_color=TEXT_PRIMARY,
             anchor="w",
         )
-        self.lbl_queue_heading.pack(side="left", padx=(0, 16))
+        self.lbl_queue_heading.pack(side="left", padx=(0, SPACE_LG))
 
         self.start_btn = ctk.CTkButton(
             queue_actions,
-            text=f"▶ {t('btn_start_download')}",
+            text=f" {t('btn_start_download')}",
+            image=get_icon("play", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=STATUS_SUCCESS,
-            hover_color="#10b981",
-            text_color="#151821",
-            corner_radius=RADIUS_MD,
-            height=32,
-            width=130,
+            hover_color="#059669",
+            text_color="#ffffff",
+            corner_radius=RADIUS_BUTTON,
+            height=34,
+            width=135,
             command=self._start_download_thread,
         )
-        self.start_btn.pack(side="left", padx=(0, 8))
+        self.start_btn.pack(side="left", padx=(0, SPACE_SM))
 
         self.stop_btn = ctk.CTkButton(
             queue_actions,
-            text=f"⏹ {t('btn_stop_download')}",
+            text=f" {t('btn_stop_download')}",
+            image=get_icon("stop", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=STATUS_DANGER,
-            hover_color="#ef4444",
+            hover_color="#e11d48",
             text_color="#ffffff",
-            corner_radius=RADIUS_MD,
-            height=32,
-            width=110,
+            corner_radius=RADIUS_BUTTON,
+            height=34,
+            width=115,
             state="disabled",
             command=self._stop_downloads,
         )
-        self.stop_btn.pack(side="left", padx=(0, 8))
+        self.stop_btn.pack(side="left", padx=(0, SPACE_SM))
 
         self.clear_btn = ctk.CTkButton(
             queue_actions,
-            text=f"🗑 {t('btn_clear_queue')}",
+            text=f" {t('btn_clear_queue')}",
+            image=get_icon("trash", size=(16, 16)),
             font=FONT_BODY,
             fg_color=SURFACE_ELEVATED,
             hover_color=BORDER_ACTIVE,
             text_color=TEXT_SECONDARY,
-            corner_radius=RADIUS_MD,
-            height=32,
-            width=120,
+            corner_radius=RADIUS_BUTTON,
+            height=34,
+            width=125,
             command=self._clear_queue,
         )
         self.clear_btn.pack(side="right")
@@ -215,12 +226,12 @@ class QueueTabMixin:
         # Treeview Container
         tree_container = ctk.CTkFrame(
             self.queue_card,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_INPUT,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        tree_container.pack(fill="both", expand=True, padx=14, pady=(0, 10))
+        tree_container.pack(fill="both", expand=True, padx=SPACE_LG, pady=(0, SPACE_MD))
 
         cols = ("no", "rjid", "title", "status")
         self.tree = ttk.Treeview(tree_container, columns=cols, show="headings", selectmode="browse", style="Treeview")
@@ -229,10 +240,10 @@ class QueueTabMixin:
         self.tree.heading("title", text=t("col_title"), anchor="w")
         self.tree.heading("status", text=t("col_status"), anchor="center")
 
-        self.tree.column("no", width=40, anchor="center")
-        self.tree.column("rjid", width=110, anchor="center")
-        self.tree.column("title", width=280, anchor="w")
-        self.tree.column("status", width=110, anchor="center")
+        self.tree.column("no", width=45, anchor="center")
+        self.tree.column("rjid", width=120, anchor="center")
+        self.tree.column("title", width=340, anchor="w")
+        self.tree.column("status", width=120, anchor="center")
 
         tree_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.tree.yview, style="Vertical.TScrollbar")
         self.tree.configure(yscrollcommand=tree_scroll.set)
@@ -244,15 +255,15 @@ class QueueTabMixin:
         # 3. Progress Card (Status, Bar, Speed, ETA)
         progress_card = ctk.CTkFrame(
             left_panel,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        progress_card.pack(fill="x", pady=(0, 10))
+        progress_card.pack(fill="x", pady=(0, SPACE_MD))
 
         p_info_row = ctk.CTkFrame(progress_card, fg_color="transparent")
-        p_info_row.pack(fill="x", padx=14, pady=(8, 4))
+        p_info_row.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_SM // 2))
 
         self.lbl_progress_status = ctk.CTkLabel(
             p_info_row,
@@ -273,16 +284,16 @@ class QueueTabMixin:
 
         self.progress_bar = ctk.CTkProgressBar(
             progress_card,
-            corner_radius=RADIUS_SM,
+            corner_radius=9999,
             height=10,
             fg_color=SURFACE_INPUT,
             progress_color=ACCENT_PRIMARY,
         )
-        self.progress_bar.pack(fill="x", padx=14, pady=(2, 4))
+        self.progress_bar.pack(fill="x", padx=SPACE_LG, pady=(2, 6))
         self.progress_bar.set(0)
 
         detail_row = ctk.CTkFrame(progress_card, fg_color="transparent")
-        detail_row.pack(fill="x", padx=14, pady=(2, 8))
+        detail_row.pack(fill="x", padx=SPACE_LG, pady=(2, SPACE_SM))
 
         self.lbl_progress_speed = ctk.CTkLabel(
             detail_row,
@@ -290,7 +301,7 @@ class QueueTabMixin:
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
         )
-        self.lbl_progress_speed.pack(side="left", padx=(0, 16))
+        self.lbl_progress_speed.pack(side="left", padx=(0, SPACE_LG))
 
         self.lbl_progress_eta = ctk.CTkLabel(
             detail_row,
@@ -298,7 +309,7 @@ class QueueTabMixin:
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
         )
-        self.lbl_progress_eta.pack(side="left", padx=(0, 16))
+        self.lbl_progress_eta.pack(side="left", padx=(0, SPACE_LG))
 
         self.lbl_progress_size = ctk.CTkLabel(
             detail_row,
@@ -311,7 +322,7 @@ class QueueTabMixin:
         # 4. Status & Log Konsol
         log_card = ctk.CTkFrame(
             left_panel,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
@@ -319,11 +330,11 @@ class QueueTabMixin:
         log_card.pack(fill="x")
 
         log_header = ctk.CTkFrame(log_card, fg_color="transparent")
-        log_header.pack(fill="x", padx=12, pady=(6, 2))
+        log_header.pack(fill="x", padx=SPACE_MD, pady=(SPACE_SM, 2))
 
         self.lbl_log_header = ctk.CTkLabel(
             log_header,
-            text=f"💻 {t('lbl_log_header')}",
+            text=t("lbl_log_header"),
             font=FONT_CAPTION,
             text_color=TEXT_SECONDARY,
             anchor="w",
@@ -341,13 +352,13 @@ class QueueTabMixin:
             insertbackground=ACCENT_PRIMARY,
             relief="flat",
         )
-        self.log_text.pack(fill="both", expand=True, padx=10, pady=(2, 8))
+        self.log_text.pack(fill="both", expand=True, padx=SPACE_SM, pady=(2, SPACE_SM))
 
         # Panel Kanan: Preview Thumbnail & Info Card
         self.right_panel = ctk.CTkFrame(
             main_container,
             width=320,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
@@ -356,12 +367,12 @@ class QueueTabMixin:
         self.right_panel.pack_propagate(False)
 
         right_header = ctk.CTkFrame(self.right_panel, fg_color="transparent")
-        right_header.pack(fill="x", padx=14, pady=(12, 6))
+        right_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
 
         self.lbl_preview_title = ctk.CTkLabel(
             right_header,
-            text=f"🖼 {t('lbl_preview_title')}",
-            font=FONT_SUBTITLE,
+            text=t("lbl_preview_title"),
+            font=FONT_SECTION,
             text_color=TEXT_PRIMARY,
             anchor="w",
         )
@@ -377,14 +388,14 @@ class QueueTabMixin:
             highlightthickness=1,
             highlightbackground=BORDER_SUBTLE,
         )
-        self.cover_canvas.pack(pady=4, padx=14)
+        self.cover_canvas.pack(pady=4, padx=SPACE_LG)
         self.cover_canvas.create_text(
             145, 97, text="Tidak ada cover", fill=TEXT_MUTED, font=FONT_BODY
         )
 
         # Info Labels
         info_inner = ctk.CTkScrollableFrame(self.right_panel, fg_color="transparent")
-        info_inner.pack(fill="both", expand=True, padx=8, pady=(4, 10))
+        info_inner.pack(fill="both", expand=True, padx=SPACE_SM, pady=(4, SPACE_MD))
 
         self.lbl_q_id = self._create_info_row(info_inner, "Kode RJ", "-", "lbl_detail_rjid")
         self.lbl_q_title = self._create_info_row(info_inner, "Judul", "-", "lbl_detail_title")
@@ -427,29 +438,12 @@ class QueueTabMixin:
         self.config["use_detailed_filename"] = self.opt_detailed_name.get()
         save_config(self.config)
 
-    def _change_download_dir(self):
-        new_dir = filedialog.askdirectory(
-            title="Pilih Folder Penyimpanan Download",
-            initialdir=os.path.abspath(get_download_dir()),
-        )
-        if new_dir:
-            set_download_dir(new_dir)
-            if hasattr(self, "lbl_current_dir"):
-                self.lbl_current_dir.configure(text=f"📁 {t('lbl_save_location', path=os.path.abspath(new_dir))}")
-            self._log(f"[i] Folder penyimpanan diubah ke: {new_dir}")
-            self._refresh_playlist_view()
-
     def _log(self, text):
         def _append():
             if hasattr(self, "log_text"):
                 self.log_text.insert("end", text + "\n")
                 self.log_text.see("end")
         self.after(0, _append)
-
-    def _open_downloads_folder(self):
-        d_dir = get_download_dir()
-        os.makedirs(d_dir, exist_ok=True)
-        os.startfile(os.path.abspath(d_dir))
 
     def _add_to_queue(self):
         raw_text = self.id_entry.get().strip()
@@ -495,25 +489,29 @@ class QueueTabMixin:
 
     def _fetch_metadata_for_item(self, row_idx, rjid):
         def _update_ui(meta, pil_img):
-            if row_idx < len(self.queue_items):
-                item = self.queue_items[row_idx]
-                title = meta.get("title") or rjid
-                item["title"] = title
-                item["cover_url"] = meta.get("cover_url", "")
-                item["cover_image"] = pil_img
-                item["circle"] = meta.get("circle", "-")
-                item["cv"] = meta.get("cv", "-")
-                item["age_rating"] = meta.get("age_rating", "-")
-                item["genre"] = meta.get("genre", "-")
+            try:
+                if row_idx < len(self.queue_items):
+                    item = self.queue_items[row_idx]
+                    title = meta.get("title") or rjid
+                    item["title"] = title
+                    item["cover_url"] = meta.get("cover_url", "")
+                    item["cover_image"] = pil_img
+                    item["circle"] = meta.get("circle", "-")
+                    item["cv"] = meta.get("cv", "-")
+                    item["age_rating"] = meta.get("age_rating", "-")
+                    item["genre"] = meta.get("genre", "-")
 
-                self.tree.set(str(row_idx), "title", title)
-                selected = self.tree.selection()
-                if selected and int(selected[0]) == row_idx:
-                    self._show_info_card(item)
-                    if pil_img:
-                        self._render_cover_image(pil_img)
+                    if hasattr(self, "tree") and self.tree.winfo_exists():
+                        self.tree.set(str(row_idx), "title", title)
+                        selected = self.tree.selection()
+                        if selected and int(selected[0]) == row_idx:
+                            self._show_info_card(item)
+                            if pil_img:
+                                self._render_cover_image(pil_img)
+            except Exception:
+                pass
 
-        meta = fetch_dlsite_metadata(rjid, REFERER, USER_AGENT)
+        meta = fetch_dlsite_metadata(rjid)
         pil_img = None
         cover_to_fetch = resolve_best_cover_url(rjid, meta.get("cover_url", ""))
 
@@ -546,7 +544,10 @@ class QueueTabMixin:
                 except Exception:
                     pass
 
-        self.after(0, lambda: _update_ui(meta, pil_img))
+        try:
+            self.after(0, lambda: _update_ui(meta, pil_img))
+        except Exception:
+            pass
 
     def _on_tree_select(self, event):
         selected = self.tree.selection()

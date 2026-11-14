@@ -11,7 +11,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/バージョン-v1.1.1-blue?style=for-the-badge" alt="Version v1.1.1" /></a>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/バージョン-v1.2.0-blue?style=for-the-badge" alt="Version v1.2.0" /></a>
     <a href="https://github.com/SayMaven/japaneseasmr-dl/blob/main/LICENSE"><img src="https://img.shields.io/badge/ライセンス-GPL%20v3.0-10b981?style=for-the-badge" alt="GPL v3.0 License" /></a>
     <img src="https://img.shields.io/badge/プラットフォーム-Windows%2010%2F11-0078d7?style=for-the-badge" alt="Platform" />
     <img src="https://img.shields.io/badge/開発言語-Python%203.10%2B-3776ab?style=for-the-badge" alt="Language" />
@@ -105,7 +105,7 @@ JapaneseASMR Downloader は、軽量かつモジュール化されたデスク�
 
 ### 1. Windowsインストーラーを使用（一般ユーザー向け・推奨）
 Pythonのインストールは不要です:
-1. **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**から最新のインストーラー **`JapaneseASMR_Setup_v1.1.1.exe`** をダウンロードします。
+1. **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**から最新のインストーラー **`JapaneseASMR_Setup_v1.2.0.exe`** をダウンロードします。
 2. インストーラーを起動し、画面の指示に従ってインストールします。
 3. スタートメニューまたはデスクトップのショートカットからすぐに起動できます。
 

@@ -502,7 +502,7 @@ class DownloadWorkerMixin:
                     eta="Sisa Waktu: -",
                     size_str="Status: Selesai",
                 )
-                self._log(f"[✓] SUKSES: Tersimpan di {os.path.basename(final_output)}")
+                self._log(f"[OK] SUKSES: Tersimpan di {os.path.basename(final_output)}")
                 norm_out = os.path.normcase(os.path.abspath(final_output))
                 self._chapters_cache.pop(norm_out, None)
                 self.after(0, self._refresh_playlist_view)

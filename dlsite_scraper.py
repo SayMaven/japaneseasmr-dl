@@ -116,7 +116,7 @@ def enrich_metadata_from_asmrone(rj_id, info):
     return info
 
 
-def fetch_dlsite_metadata(rj_id):
+def fetch_dlsite_metadata(rj_id, *args, **kwargs):
     """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating, Cover HD) langsung dari DLsite resmi."""
     clean_id = rj_id.strip().upper()
     info = {

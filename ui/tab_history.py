@@ -18,19 +18,26 @@ from ui.dialogs import (
     show_dark_info,
     show_dark_warning,
 )
+from ui.icons import get_icon
 from ui.theme import (
     ACCENT_HOVER,
     ACCENT_PRIMARY,
+    BG_VIEWPORT,
     BORDER_ACTIVE,
     BORDER_SUBTLE,
     FONT_BODY,
     FONT_BODY_BOLD,
     FONT_CAPTION,
     FONT_CODE,
+    FONT_SECTION,
     FONT_SUBTITLE,
-    RADIUS_LG,
-    RADIUS_MD,
-    RADIUS_SM,
+    RADIUS_BUTTON,
+    RADIUS_CARD,
+    RADIUS_INPUT,
+    SPACE_LG,
+    SPACE_MD,
+    SPACE_SM,
+    SPACE_XL,
     STATUS_DANGER,
     STATUS_INFO,
     STATUS_SUCCESS,
@@ -45,7 +52,7 @@ from ui.theme import (
 
 
 class HistoryTabMixin:
-    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Riwayat (History)."""
+    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Riwayat (History) v1.2.0."""
     def _build_history_tab(self):
         container = self.tab_history
 
@@ -54,25 +61,25 @@ class HistoryTabMixin:
         main_container.pack(fill="both", expand=True)
 
         left_h_panel = ctk.CTkFrame(main_container, fg_color="transparent")
-        left_h_panel.pack(side="left", fill="both", expand=True, padx=(0, 12))
+        left_h_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
         # 1. Header Riwayat & Kontrol (Modern Card)
         header_card = ctk.CTkFrame(
             left_h_panel,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        header_card.pack(fill="x", pady=(0, 10))
+        header_card.pack(fill="x", pady=(0, SPACE_MD))
 
         h_header = ctk.CTkFrame(header_card, fg_color="transparent")
-        h_header.pack(fill="x", padx=14, pady=(10, 8))
+        h_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
 
         self.lbl_h_header = ctk.CTkLabel(
             h_header,
-            text=f"📜 {t('tab_history')}",
-            font=FONT_SUBTITLE,
+            text=t("tab_history"),
+            font=FONT_SECTION,
             text_color=TEXT_PRIMARY,
             anchor="w",
         )
@@ -80,46 +87,48 @@ class HistoryTabMixin:
 
         self.refresh_hist_btn = ctk.CTkButton(
             h_header,
-            text=f"🔄 {t('btn_refresh_playlist')}",
+            text=f" {t('btn_refresh_playlist')}",
+            image=get_icon("refresh", size=(16, 16)),
             font=FONT_BODY,
             fg_color=SURFACE_ELEVATED,
             hover_color=BORDER_ACTIVE,
             text_color=TEXT_PRIMARY,
-            corner_radius=RADIUS_MD,
-            height=30,
-            width=100,
+            corner_radius=RADIUS_BUTTON,
+            height=32,
+            width=110,
             command=self._load_history_view,
         )
         self.refresh_hist_btn.pack(side="right")
 
         # Search Bar
         search_row = ctk.CTkFrame(header_card, fg_color="transparent")
-        search_row.pack(fill="x", padx=14, pady=(0, 10))
+        search_row.pack(fill="x", padx=SPACE_LG, pady=(0, SPACE_MD))
 
         self.hist_search_entry = ctk.CTkEntry(
             search_row,
-            placeholder_text="🔍 Cari berdasarkan kode RJ, judul, atau CV...",
+            placeholder_text="Cari berdasarkan kode RJ, judul, atau CV...",
             font=FONT_BODY,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_INPUT,
             fg_color=SURFACE_INPUT,
             border_width=1,
             border_color=BORDER_SUBTLE,
             text_color=TEXT_PRIMARY,
-            height=34,
+            height=36,
         )
-        self.hist_search_entry.pack(side="left", fill="x", expand=True, padx=(0, 8))
+        self.hist_search_entry.pack(side="left", fill="x", expand=True, padx=(0, SPACE_SM))
         self.hist_search_entry.bind("<KeyRelease>", lambda e: self._on_hist_search_changed())
 
         self.btn_clear_search = ctk.CTkButton(
             search_row,
-            text="✕ Reset",
+            text=" Reset",
+            image=get_icon("rotate-ccw", size=(14, 14)),
             font=FONT_CAPTION,
             fg_color=SURFACE_ELEVATED,
             hover_color=BORDER_ACTIVE,
             text_color=TEXT_SECONDARY,
-            corner_radius=RADIUS_MD,
-            height=34,
-            width=70,
+            corner_radius=RADIUS_BUTTON,
+            height=36,
+            width=80,
             command=self._reset_hist_search,
         )
         self.btn_clear_search.pack(side="right")
@@ -127,16 +136,16 @@ class HistoryTabMixin:
         # 2. Tabel Riwayat (Modern Card)
         table_card = ctk.CTkFrame(
             left_h_panel,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        table_card.pack(fill="both", expand=True, pady=(0, 10))
+        table_card.pack(fill="both", expand=True, pady=(0, SPACE_MD))
 
         # Banner Statistik Penyimpanan
         stats_frame = ctk.CTkFrame(table_card, fg_color="transparent")
-        stats_frame.pack(fill="x", padx=14, pady=(10, 6))
+        stats_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM // 2))
 
         self.lbl_hist_stats = ctk.CTkLabel(
             stats_frame,
@@ -150,12 +159,12 @@ class HistoryTabMixin:
         # Tabel Riwayat Treeview
         tree_container = ctk.CTkFrame(
             table_card,
-            corner_radius=RADIUS_MD,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_INPUT,
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        tree_container.pack(fill="both", expand=True, padx=14, pady=(0, 12))
+        tree_container.pack(fill="both", expand=True, padx=SPACE_LG, pady=(0, SPACE_MD))
 
         cols = ("date", "rjid", "title", "size")
         self.hist_tree = ttk.Treeview(tree_container, columns=cols, show="headings", selectmode="browse", style="Treeview")
@@ -165,9 +174,9 @@ class HistoryTabMixin:
         self.hist_tree.heading("size", text=t("col_play_duration"), anchor="center")
 
         self.hist_tree.column("date", width=140, anchor="center")
-        self.hist_tree.column("rjid", width=110, anchor="center")
-        self.hist_tree.column("title", width=290, anchor="w")
-        self.hist_tree.column("size", width=80, anchor="center")
+        self.hist_tree.column("rjid", width=120, anchor="center")
+        self.hist_tree.column("title", width=360, anchor="w")
+        self.hist_tree.column("size", width=90, anchor="center")
 
         h_scroll = ttk.Scrollbar(tree_container, orient="vertical", command=self.hist_tree.yview, style="Vertical.TScrollbar")
         self.hist_tree.configure(yscrollcommand=h_scroll.set)
@@ -181,7 +190,7 @@ class HistoryTabMixin:
         self.right_h_panel = ctk.CTkFrame(
             main_container,
             width=320,
-            corner_radius=RADIUS_LG,
+            corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
             border_color=BORDER_SUBTLE,
@@ -190,12 +199,12 @@ class HistoryTabMixin:
         self.right_h_panel.pack_propagate(False)
 
         right_h_header = ctk.CTkFrame(self.right_h_panel, fg_color="transparent")
-        right_h_header.pack(fill="x", padx=14, pady=(12, 6))
+        right_h_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
 
         self.lbl_hist_detail_title = ctk.CTkLabel(
             right_h_header,
-            text=f"📌 {t('lbl_preview_title')}",
-            font=FONT_SUBTITLE,
+            text=t("lbl_preview_title"),
+            font=FONT_SECTION,
             text_color=TEXT_PRIMARY,
             anchor="w",
         )
@@ -211,24 +220,25 @@ class HistoryTabMixin:
             highlightthickness=1,
             highlightbackground=BORDER_SUBTLE,
         )
-        self.hist_canvas.pack(pady=4, padx=14)
+        self.hist_canvas.pack(pady=4, padx=SPACE_LG)
         self.hist_canvas.create_text(
             145, 97, text="Pilih item riwayat", fill=TEXT_MUTED, font=FONT_BODY
         )
 
         # Tombol Aksi di Bawah Panel Kanan
         h_actions = ctk.CTkFrame(self.right_h_panel, fg_color="transparent")
-        h_actions.pack(fill="x", padx=14, pady=12, side="bottom")
+        h_actions.pack(fill="x", padx=SPACE_LG, pady=SPACE_MD, side="bottom")
 
         self.btn_play_file = ctk.CTkButton(
             h_actions,
-            text=f"▶ {t('btn_play_selected')}",
+            text=f" {t('btn_play_selected')}",
+            image=get_icon("play", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=STATUS_SUCCESS,
-            hover_color="#10b981",
-            text_color="#151821",
-            corner_radius=RADIUS_MD,
-            height=34,
+            hover_color="#059669",
+            text_color="#ffffff",
+            corner_radius=RADIUS_BUTTON,
+            height=36,
             state="disabled",
             command=self._play_history_in_player,
         )
@@ -236,13 +246,14 @@ class HistoryTabMixin:
 
         self.btn_open_folder_file = ctk.CTkButton(
             h_actions,
-            text="📁 Buka Berkas Audio",
+            text=" Buka Berkas Audio",
+            image=get_icon("folder", size=(16, 16)),
             font=FONT_BODY,
             fg_color=SURFACE_ELEVATED,
             hover_color=BORDER_ACTIVE,
             text_color=TEXT_PRIMARY,
-            corner_radius=RADIUS_MD,
-            height=30,
+            corner_radius=RADIUS_BUTTON,
+            height=32,
             state="disabled",
             command=self._open_selected_history_file,
         )
@@ -250,13 +261,14 @@ class HistoryTabMixin:
 
         self.btn_del_history = ctk.CTkButton(
             h_actions,
-            text=f"🗑 {t('btn_clear_history')}",
+            text=f" {t('btn_clear_history')}",
+            image=get_icon("trash", size=(14, 14)),
             font=FONT_CAPTION,
             fg_color=SURFACE_INPUT,
             hover_color=STATUS_DANGER,
             text_color=STATUS_DANGER,
-            corner_radius=RADIUS_MD,
-            height=28,
+            corner_radius=RADIUS_BUTTON,
+            height=30,
             state="disabled",
             command=lambda: self._delete_history_item(),
         )
@@ -264,7 +276,7 @@ class HistoryTabMixin:
 
         # Info Labels (Scrollable)
         h_info_scroll = ctk.CTkScrollableFrame(self.right_h_panel, fg_color="transparent")
-        h_info_scroll.pack(fill="both", expand=True, padx=8, pady=(4, 6))
+        h_info_scroll.pack(fill="both", expand=True, padx=SPACE_SM, pady=(4, 6))
 
         self.lbl_h_id = self._create_info_row(h_info_scroll, "Kode RJ", "-", "lbl_detail_rjid")
         self.lbl_h_title = self._create_info_row(h_info_scroll, "Judul", "-", "lbl_detail_title")
@@ -356,7 +368,7 @@ class HistoryTabMixin:
             if os.path.exists(file_path):
                 self.btn_play_file.configure(state="normal")
             else:
-                self.lbl_h_path.configure(text="❌ File Sudah Dihapus / Tidak Ditemukan")
+                self.lbl_h_path.configure(text="[!] File Sudah Dihapus / Tidak Ditemukan")
                 self.btn_play_file.configure(state="disabled")
 
             # Load Cover Thumbnail
@@ -424,7 +436,7 @@ class HistoryTabMixin:
             if os.path.exists(file_path):
                 os.startfile(file_path)
             else:
-                self.lbl_h_path.configure(text="❌ File Sudah Dihapus / Tidak Ditemukan")
+                self.lbl_h_path.configure(text="[!] File Sudah Dihapus / Tidak Ditemukan")
                 self.btn_play_file.configure(state="disabled")
                 ans = ask_dark_yesno(
                     self,
@@ -447,7 +459,6 @@ class HistoryTabMixin:
         histories = load_history()
         if 0 <= idx < len(histories):
             deleted = histories.pop(idx)
-            from config_manager import save_history
             save_history(histories)
             self._load_history_view()
             # Reset detail view

@@ -11,7 +11,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/Version-v1.1.1-blue?style=for-the-badge" alt="Version v1.1.1" /></a>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/Version-v1.2.0-blue?style=for-the-badge" alt="Version v1.2.0" /></a>
     <a href="https://github.com/SayMaven/japaneseasmr-dl/blob/main/LICENSE"><img src="https://img.shields.io/badge/License-GPL%20v3.0-10b981?style=for-the-badge" alt="GPL v3.0 License" /></a>
     <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d7?style=for-the-badge" alt="Platform" />
     <img src="https://img.shields.io/badge/Language-Python%203.10%2B-3776ab?style=for-the-badge" alt="Language" />
@@ -107,7 +107,7 @@ When running from source code, ensure the following prerequisites are installed:
 
 ### 1. Windows Installer (Recommended)
 No Python or third-party tools installation required for regular users:
-1. Download the latest installer **`JapaneseASMR_Setup_v1.1.1.exe`** from **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
+1. Download the latest installer **`JapaneseASMR_Setup_v1.2.0.exe`** from **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
 2. Run the installer and follow the guided setup wizard.
 3. Launch the application directly from your Start Menu or Desktop!
 

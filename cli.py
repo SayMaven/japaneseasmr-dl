@@ -45,7 +45,7 @@ DEFAULT_ID = "RJ01673437"
 
 def print_banner():
     print(f"\n{CYAN}{BOLD}==================================================={RESET}")
-    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader v1.1.1 (Terminal CLI)   {RESET}")
+    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader v1.2.0 (Terminal CLI)   {RESET}")
     print(f"{CYAN}{BOLD}==================================================={RESET}\n")
 
 

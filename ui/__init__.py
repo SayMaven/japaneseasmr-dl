@@ -7,6 +7,8 @@ from ui.dialogs import (
     show_dark_error,
     ask_dark_yesno,
 )
+from ui.icons import get_icon
+from ui.tab_settings import SettingsTabMixin
 
 __all__ = [
     "JapaneseASMRApp",
@@ -16,5 +18,6 @@ __all__ = [
     "show_dark_warning",
     "show_dark_error",
     "ask_dark_yesno",
+    "get_icon",
+    "SettingsTabMixin",
 ]
-

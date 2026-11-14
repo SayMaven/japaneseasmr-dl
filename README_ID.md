@@ -11,7 +11,7 @@
   </p>
 
   <p>
-    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/Versi-v1.1.1-blue?style=for-the-badge" alt="Versi v1.1.1" /></a>
+    <a href="https://github.com/SayMaven/japaneseasmr-dl/releases/latest"><img src="https://img.shields.io/badge/Versi-v1.2.0-blue?style=for-the-badge" alt="Versi v1.2.0" /></a>
     <a href="https://github.com/SayMaven/japaneseasmr-dl/blob/main/LICENSE"><img src="https://img.shields.io/badge/Lisensi-GPL%20v3.0-10b981?style=for-the-badge" alt="Lisensi GPL v3.0" /></a>
     <img src="https://img.shields.io/badge/Platform-Windows%2010%2F11-0078d7?style=for-the-badge" alt="Platform" />
     <img src="https://img.shields.io/badge/Bahasa-Python%203.10%2B-3776ab?style=for-the-badge" alt="Bahasa" />
@@ -111,7 +111,7 @@ Sebelum menjalankan aplikasi dari *source code*, pastikan komponen berikut telah
 
 ### 1. Menggunakan Installer Windows (Direkomendasikan)
 Bagi pengguna umum, Anda **tidak perlu menginstal Python atau alat tambahan apa pun**:
-1. Unduh installer terbaru **`JapaneseASMR_Setup_v1.1.1.exe`** dari menu **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
+1. Unduh installer terbaru **`JapaneseASMR_Setup_v1.2.0.exe`** dari menu **[Releases](https://github.com/SayMaven/japaneseasmr-dl/releases)**.
 2. Jalankan installer dan ikuti petunjuk pemasangan hingga selesai.
 3. Aplikasi siap digunakan langsung dari Start Menu atau Desktop!
 

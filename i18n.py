@@ -44,7 +44,7 @@ TRANSLATIONS = {
     "en": {
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "Version 1.1.1 (Release Build) • Windows Edition",
+        "app_version": "Version 1.2.0 (Release Build) • Windows Edition",
         "btn_change_dir": "Change Folder",
         "btn_open_folder": "Open Folder",
         "btn_settings": "Settings",
@@ -138,11 +138,15 @@ TRANSLATIONS = {
         "lbl_language": "Display Language:",
         "lbl_language_desc": "Select application language (Auto follows Windows language).",
         "lbl_download_dir": "Default Download Directory:",
+        "lbl_storage_folder": "Default Download Directory",
+        "lbl_storage_folder_desc": "Main directory for downloaded ASMR files and extracted tracks.",
         "btn_browse": "Browse...",
         "lbl_file_pref": "Download & File Preferences:",
         "chk_detailed_name": "Use work title as audio filename (uncheck for RJ code only)",
         "chk_notify": "Show popup notification when download completes",
+        "chk_notify_popup": "Show popup notification when download completes",
         "chk_clipboard": "Auto-detect and paste RJ code when copying to clipboard",
+        "chk_auto_clipboard": "Auto-detect and paste links when copying DLsite URLs",
 
         "lbl_settings_download_title": "Download Engine & Acceleration",
         "lbl_audio_format": "Target Audio Container & Codec:",
@@ -150,7 +154,12 @@ TRANSLATIONS = {
         "fmt_auto": "Auto (Recommended - M4A Fast Remux / MP3)",
         "fmt_m4a": "M4A (Apple AAC, Lossless Remux, Native Chapters)",
         "fmt_mp3": "MP3 (High Quality 320k + Companion CUE Sheet)",
+        "fmt_flac": "FLAC (Lossless Studio Quality)",
+        "fmt_wav": "WAV (Uncompressed PCM Audio)",
         "lbl_connections": "Parallel aria2c Connections (1 - 32):",
+        "lbl_aria2_connections": "Parallel aria2c Connections (Multi-source)",
+        "lbl_aria2_connections_desc": "Simultaneous connection threads used to accelerate downloads (4 - 32).",
+        "lbl_ytdlp_engine": "yt-dlp Core Engine",
         "lbl_ytdlp_channel": "yt-dlp Update Channel:",
         "btn_update_ytdlp": "Check for yt-dlp Updates",
 
@@ -160,6 +169,7 @@ TRANSLATIONS = {
         "lbl_temp_cache_size": "Temporary Partitions: {size}",
         "btn_clear_covers": "Clear Cover Cache",
         "btn_clear_temp": "Clear Temporary Files",
+        "btn_clear_all_history": "Clear All Download History",
 
         "lbl_settings_about_title": "About Application",
         "lbl_about_desc": "All-in-one desktop application to download JapaneseASMR audio, auto-merge multi-tracks & omake, embed HD cover art & official DLsite metadata, and enjoy built-in gapless audio playback.",
@@ -193,7 +203,7 @@ TRANSLATIONS = {
     "id": {
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "Versi 1.1.1 (Release Build) • Windows Edition",
+        "app_version": "Versi 1.2.0 (Release Build) • Windows Edition",
         "btn_change_dir": "Ganti Folder",
         "btn_open_folder": "Buka Folder",
         "btn_settings": "Pengaturan",
@@ -287,11 +297,15 @@ TRANSLATIONS = {
         "lbl_language": "Bahasa Tampilan:",
         "lbl_language_desc": "Pilih bahasa antarmuka (Otomatis mengikuti bahasa Windows).",
         "lbl_download_dir": "Lokasi Folder Penyimpanan Download:",
+        "lbl_storage_folder": "Lokasi Folder Penyimpanan Download",
+        "lbl_storage_folder_desc": "Direktori utama penyimpanan berkas audio ASMR dan track yang diekstrak.",
         "btn_browse": "Browse...",
         "lbl_file_pref": "Preferensi & Perilaku Unduhan:",
         "chk_detailed_name": "Gunakan judul karya sebagai nama file audio (hilangkan centang untuk hanya kode RJ)",
         "chk_notify": "Tampilkan notifikasi popup saat unduhan selesai",
+        "chk_notify_popup": "Tampilkan notifikasi popup saat unduhan selesai",
         "chk_clipboard": "Otomatis deteksi dan tempel kode RJ saat menyalin ke clipboard",
+        "chk_auto_clipboard": "Otomatis paste tautan saat mendeteksi URL DLsite di clipboard",
 
         "lbl_settings_download_title": "Engine Unduhan & Akselerasi",
         "lbl_audio_format": "Format Kontainer Audio Target:",
@@ -299,7 +313,12 @@ TRANSLATIONS = {
         "fmt_auto": "Otomatis (Rekomendasi - M4A Fast Remux / MP3)",
         "fmt_m4a": "M4A (Apple AAC, Lossless Remux, Bab Native)",
         "fmt_mp3": "MP3 (Kualitas Tinggi 320k + Berkas CUE Sheet)",
+        "fmt_flac": "FLAC (Kualitas Studio Lossless)",
+        "fmt_wav": "WAV (Audio PCM Tanpa Kompresi)",
         "lbl_connections": "Jumlah Koneksi Paralel aria2c (1 - 32):",
+        "lbl_aria2_connections": "Koneksi Paralel aria2c (Multi-source)",
+        "lbl_aria2_connections_desc": "Jumlah koneksi thread simultan untuk mempercepat proses unduhan (4 - 32).",
+        "lbl_ytdlp_engine": "Engine Inti yt-dlp",
         "lbl_ytdlp_channel": "Channel Pembaruan yt-dlp:",
         "btn_update_ytdlp": "Periksa Pembaruan yt-dlp",
 
@@ -309,6 +328,7 @@ TRANSLATIONS = {
         "lbl_temp_cache_size": "File Partisi Sementara: {size}",
         "btn_clear_covers": "Bersihkan Cache Cover",
         "btn_clear_temp": "Bersihkan File Sementara",
+        "btn_clear_all_history": "Hapus Semua Riwayat Unduhan",
 
         "lbl_settings_about_title": "Tentang Aplikasi",
         "lbl_about_desc": "Aplikasi desktop all-in-one modern untuk mengunduh audio JapaneseASMR, menggabungkan multi-track & omake, menyematkan cover art HD & metadata DLsite resmi, serta dilengkapi pemutar audio bawaan.",
@@ -342,7 +362,7 @@ TRANSLATIONS = {
     "ja": {
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "バージョン 1.1.1 (Release Build) • Windows Edition",
+        "app_version": "バージョン 1.2.0 (Release Build) • Windows Edition",
         "btn_change_dir": "フォルダ変更",
         "btn_open_folder": "フォルダを開く",
         "btn_settings": "設定",
@@ -436,11 +456,15 @@ TRANSLATIONS = {
         "lbl_language": "表示言語:",
         "lbl_language_desc": "インターフェース言語を選択（自動選択はWindowsの言語に追従）。",
         "lbl_download_dir": "デフォルトのダウンロード先フォルダ:",
+        "lbl_storage_folder": "ダウンロード保存先フォルダ",
+        "lbl_storage_folder_desc": "ダウンロードしたASMR音声と展開トラックの保存場所。",
         "btn_browse": "参照...",
         "lbl_file_pref": "ダウンロードとファイル設定:",
         "chk_detailed_name": "作品名を音声ファイル名に使用（チェックを外すとRJ番号のみ）",
         "chk_notify": "ダウンロード完了時にポップアップ通知を表示する",
+        "chk_notify_popup": "ダウンロード完了時にポップアップ通知を表示する",
         "chk_clipboard": "クリップボードのRJ番号を自動検出して貼り付ける",
+        "chk_auto_clipboard": "クリップボードのDLsite URLを自動検出して貼り付ける",
 
         "lbl_settings_download_title": "ダウンロードエンジンとアクセラレーション",
         "lbl_audio_format": "出力音声フォーマット:",
@@ -448,7 +472,12 @@ TRANSLATIONS = {
         "fmt_auto": "自動（推奨 - M4A 高速リマックス / MP3）",
         "fmt_m4a": "M4A（Apple AAC、ロスレス、チャプター埋め込み）",
         "fmt_mp3": "MP3（高品質 320k + CUEシート付属）",
+        "fmt_flac": "FLAC（スタジオ音質・完全可逆圧縮）",
+        "fmt_wav": "WAV（非圧縮 PCM オーディオ）",
         "lbl_connections": "aria2c 並列接続数 (1 - 32):",
+        "lbl_aria2_connections": "aria2c 並列接続数（マルチスレッド）",
+        "lbl_aria2_connections_desc": "ダウンロードを高速化するための同時接続スレッド数 (4 - 32)。",
+        "lbl_ytdlp_engine": "yt-dlp コアエンジン",
         "lbl_ytdlp_channel": "yt-dlp 更新チャンネル:",
         "btn_update_ytdlp": "yt-dlp の更新を確認",
 
@@ -458,6 +487,7 @@ TRANSLATIONS = {
         "lbl_temp_cache_size": "一時ファイル容量: {size}",
         "btn_clear_covers": "カバーキャッシュを消去",
         "btn_clear_temp": "一時ファイルを消去",
+        "btn_clear_all_history": "すべてのダウンロード履歴を消去",
 
         "lbl_settings_about_title": "このアプリについて",
         "lbl_about_desc": "JapaneseASMR音声をダウンロードし、マルチトラックや特典音声を自動結合、公式DLsiteのHDカバーとメタデータを埋め込み、内蔵プレーヤーで楽しめるオールインワンアプリです。",
@@ -491,7 +521,7 @@ TRANSLATIONS = {
     "zh": {
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "版本 1.1.1 (Release Build) • Windows Edition",
+        "app_version": "版本 1.2.0 (Release Build) • Windows Edition",
         "btn_change_dir": "更改目录",
         "btn_open_folder": "打开目录",
         "btn_settings": "设置",
@@ -585,11 +615,15 @@ TRANSLATIONS = {
         "lbl_language": "显示语言:",
         "lbl_language_desc": "选择界面语言（自动跟随Windows系统语言）。",
         "lbl_download_dir": "默认下载目录:",
+        "lbl_storage_folder": "默认下载存储目录",
+        "lbl_storage_folder_desc": "下载的ASMR音频与解压音轨的主要保存位置。",
         "btn_browse": "浏览...",
         "lbl_file_pref": "下载与文件偏好:",
         "chk_detailed_name": "使用作品标题作为音频文件名（取消勾选则仅使用RJ号）",
         "chk_notify": "下载完成时显示弹窗通知",
+        "chk_notify_popup": "下载完成时显示弹窗通知",
         "chk_clipboard": "复制到剪贴板时自动检测并粘贴RJ号",
+        "chk_auto_clipboard": "剪贴板检测到DLsite链接时自动粘贴",
 
         "lbl_settings_download_title": "下载引擎与加速",
         "lbl_audio_format": "目标音频格式:",
@@ -597,7 +631,12 @@ TRANSLATIONS = {
         "fmt_auto": "自动（推荐 - M4A 快速封装 / MP3）",
         "fmt_m4a": "M4A（Apple AAC、无损封装、内置章节）",
         "fmt_mp3": "MP3（高音质 320k + 附带CUE分轨文件）",
+        "fmt_flac": "FLAC（无损工作室音质）",
+        "fmt_wav": "WAV（原始未压缩 PCM 音频）",
         "lbl_connections": "aria2c 并行连接数 (1 - 32):",
+        "lbl_aria2_connections": "aria2c 并行连接数 (多线程加速)",
+        "lbl_aria2_connections_desc": "用于多线程加速下载的同时并发连接数 (4 - 32)。",
+        "lbl_ytdlp_engine": "yt-dlp 核心引擎",
         "lbl_ytdlp_channel": "yt-dlp 更新通道:",
         "btn_update_ytdlp": "检查 yt-dlp 更新",
 
@@ -607,6 +646,7 @@ TRANSLATIONS = {
         "lbl_temp_cache_size": "临时分段文件: {size}",
         "btn_clear_covers": "清理封面缓存",
         "btn_clear_temp": "清理临时文件",
+        "btn_clear_all_history": "清空所有下载历史记录",
 
         "lbl_settings_about_title": "关于本应用",
         "lbl_about_desc": "一站式桌面应用，用于下载JapaneseASMR音频、自动合并多音轨与特典、嵌入DLsite官方高清封面与完整元数据，并配备内置音频播放器。",
