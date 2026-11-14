@@ -66,6 +66,60 @@ from ui.theme import (
 )
 
 
+ASMR_KEYWORDS = [
+    "asmr", "耳かき", "添い寝", "ボイス", "音声", "バイノーラル", "binaural",
+    "ku100", "囁き", "吐息", "オノマトペ", "シチュエーション", "安眠",
+    "同人", "特典", "dlsite", "cv:", "cv：", "cv.", "cv ", "mimikaki"
+]
+
+
+def _is_asmr_audio(full_path, filename, root_dir, download_dir, hist_meta):
+    r"""
+    Menentukan apakah suatu berkas audio merupakan karya ASMR / Voice Drama.
+    Menggunakan Smart Multi-Tier Heuristic:
+    1. Ada di riwayat unduhan aplikasi (load_history).
+    2. Nama file atau folder memuat ID DLsite (RJ/VJ/BJ\d{6,8}).
+    3. Nama file atau folder memuat kata kunci ASMR / Voice Drama (ASMR_KEYWORDS).
+    4. Folder memuat sidecar CUE sheet (.cue) atau metadata DLsite.
+    5. Tag internal audio (ID3/MP4/FLAC) memuat genre atau comment bertema ASMR.
+    """
+    if hist_meta:
+        return True
+
+    in_subfolder = os.path.abspath(root_dir) != os.path.abspath(download_dir)
+    r_lower = os.path.basename(root_dir).lower() if in_subfolder else ""
+
+    # 1. Pola Kode RJ / VJ / BJ pada nama file atau nama folder subkarya
+    if re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", filename, re.IGNORECASE) or (
+        in_subfolder and re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", os.path.basename(root_dir), re.IGNORECASE)
+    ):
+        return True
+
+    # 2. Kata Kunci ASMR pada nama file atau nama folder subkarya
+    f_lower = filename.lower()
+    if any(k in f_lower or (in_subfolder and k in r_lower) for k in ASMR_KEYWORDS):
+        return True
+
+    # 3. Sidecar CUE sheet di folder yang sama
+    base_no_ext = os.path.splitext(full_path)[0]
+    if os.path.exists(base_no_ext + ".cue"):
+        return True
+
+    # 4. Tag metadata internal via mutagen (jika terpasang)
+    try:
+        import mutagen
+        audio = mutagen.File(full_path)
+        if audio and audio.tags:
+            for tag_val in audio.tags.values():
+                val_str = str(tag_val).lower()
+                if any(k in val_str for k in ("asmr", "binaural", "バイノーラル", "dlsite", "drama", "voice", "耳かき")):
+                    return True
+    except Exception:
+        pass
+
+    return False
+
+
 class PlayerTabMixin:
     """Mixin untuk membangun antarmuka dan logika pemutar audio (Player Tab) v1.2.0."""
     def _build_player_tab(self):
@@ -78,7 +132,7 @@ class PlayerTabMixin:
         left_p_panel = ctk.CTkFrame(main_container, fg_color="transparent")
         left_p_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
-        # 1. Playlist Card
+        # 1. Playlist Card (Mengisi Penuh Panel Kiri)
         playlist_card = ctk.CTkFrame(
             left_p_panel,
             corner_radius=RADIUS_CARD,
@@ -86,7 +140,7 @@ class PlayerTabMixin:
             border_width=1,
             border_color=BORDER_SUBTLE,
         )
-        playlist_card.pack(fill="both", expand=True, pady=(0, SPACE_MD))
+        playlist_card.pack(fill="both", expand=True, pady=0)
 
         p_header = ctk.CTkFrame(playlist_card, fg_color="transparent")
         p_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM))
@@ -145,57 +199,10 @@ class PlayerTabMixin:
         self.player_tree.bind("<Double-1>", lambda e: self._player_play_selected())
         self.player_tree.bind("<<TreeviewSelect>>", self._on_playlist_select)
 
-        # 2. Chapters Card (Bab Audio)
-        self.chap_frame = ctk.CTkFrame(
-            left_p_panel,
-            height=160,
-            corner_radius=RADIUS_CARD,
-            fg_color=SURFACE_CARD,
-            border_width=1,
-            border_color=BORDER_SUBTLE,
-        )
-        self.chap_frame.pack(fill="x", pady=0)
-        self.chap_frame.pack_propagate(False)
-
-        chap_header = ctk.CTkFrame(self.chap_frame, fg_color="transparent")
-        chap_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, 4))
-
-        self.lbl_chap_title = ctk.CTkLabel(
-            chap_header,
-            text=t("lbl_chapters"),
-            font=FONT_SECTION,
-            text_color=TEXT_PRIMARY,
-            anchor="w",
-        )
-        self.lbl_chap_title.pack(side="left")
-
-        chap_tree_container = ctk.CTkFrame(
-            self.chap_frame,
-            corner_radius=RADIUS_CARD,
-            fg_color=SURFACE_INPUT,
-            border_width=1,
-            border_color=BORDER_SUBTLE,
-        )
-        chap_tree_container.pack(fill="both", expand=True, padx=SPACE_LG, pady=(0, SPACE_SM))
-
-        c_cols = ("time", "title")
-        self.chap_tree = ttk.Treeview(chap_tree_container, columns=c_cols, show="headings", selectmode="browse", style="Treeview")
-        self.chap_tree.heading("time", text=t("col_chap_time"), anchor="center")
-        self.chap_tree.heading("title", text=t("col_chap_title"), anchor="w")
-        self.chap_tree.column("time", width=90, anchor="center")
-        self.chap_tree.column("title", width=380, anchor="w")
-
-        chap_scroll = ttk.Scrollbar(chap_tree_container, orient="vertical", command=self.chap_tree.yview, style="Vertical.TScrollbar")
-        self.chap_tree.configure(yscrollcommand=chap_scroll.set)
-
-        self.chap_tree.pack(side="left", fill="both", expand=True, padx=2, pady=2)
-        chap_scroll.pack(side="right", fill="y", padx=(0, 2), pady=2)
-        self.chap_tree.bind("<Double-1>", self._on_chapter_double_click)
-
-        # 3. Panel Kanan: Now Playing Screen & Controls
+        # 2. Panel Kanan: Now Playing Screen, Controls, & Chapters
         self.right_p_panel = ctk.CTkFrame(
             main_container,
-            width=340,
+            width=370,
             corner_radius=RADIUS_CARD,
             fg_color=SURFACE_CARD,
             border_width=1,
@@ -405,6 +412,51 @@ class PlayerTabMixin:
         )
         self.lbl_vol_val.pack(side="right")
 
+        # 3. Chapters Card (Bab Audio) di bawah bar volume
+        self.chap_frame = ctk.CTkFrame(
+            self.right_p_panel,
+            corner_radius=RADIUS_CARD,
+            fg_color=SURFACE_INPUT,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+        )
+        self.chap_frame.pack(fill="both", expand=True, padx=SPACE_LG, pady=(0, SPACE_MD))
+
+        chap_header = ctk.CTkFrame(self.chap_frame, fg_color="transparent")
+        chap_header.pack(fill="x", padx=SPACE_SM, pady=(SPACE_SM, 4))
+
+        self.lbl_chap_title = ctk.CTkLabel(
+            chap_header,
+            text=t("lbl_chapters"),
+            font=FONT_SECTION,
+            text_color=TEXT_PRIMARY,
+            anchor="w",
+        )
+        self.lbl_chap_title.pack(side="left")
+
+        chap_tree_container = ctk.CTkFrame(
+            self.chap_frame,
+            corner_radius=RADIUS_BUTTON,
+            fg_color=SURFACE_CARD,
+            border_width=1,
+            border_color=BORDER_SUBTLE,
+        )
+        chap_tree_container.pack(fill="both", expand=True, padx=SPACE_SM, pady=(0, SPACE_SM))
+
+        c_cols = ("time", "title")
+        self.chap_tree = ttk.Treeview(chap_tree_container, columns=c_cols, show="headings", selectmode="browse", style="Treeview")
+        self.chap_tree.heading("time", text=t("col_chap_time"), anchor="center")
+        self.chap_tree.heading("title", text=t("col_chap_title"), anchor="w")
+        self.chap_tree.column("time", width=65, anchor="center")
+        self.chap_tree.column("title", width=235, anchor="w")
+
+        chap_scroll = ttk.Scrollbar(chap_tree_container, orient="vertical", command=self.chap_tree.yview, style="Vertical.TScrollbar")
+        self.chap_tree.configure(yscrollcommand=chap_scroll.set)
+
+        self.chap_tree.pack(side="left", fill="both", expand=True, padx=2, pady=2)
+        chap_scroll.pack(side="right", fill="y", padx=(0, 2), pady=2)
+        self.chap_tree.bind("<Double-1>", self._on_chapter_double_click)
+
     def _sync_active_chapter(self, cur_pos_ms):
         if not self.current_chapters:
             return
@@ -533,6 +585,10 @@ class PlayerTabMixin:
                         rjid_detected = match.group(1).upper() if match else "-"
                         ref_meta = hist_by_path.get(norm_p) or (hist_by_rjid.get(rjid_detected) if rjid_detected != "-" else None)
 
+                        # Filter Cerdas: Hanya karya ASMR yang sah yang dimasukkan ke playlist!
+                        if not _is_asmr_audio(full_path, f, root, download_dir, ref_meta):
+                            continue
+
                         # Hitung ukuran berkas
                         try:
                             fsize = os.path.getsize(full_path)
@@ -557,8 +613,26 @@ class PlayerTabMixin:
                         else:
                             title_to_use = title_display
 
-                        cv_display = ref_meta.get("cv", "-") if ref_meta else "-"
-                        circle_display = ref_meta.get("circle", "-") if ref_meta else "-"
+                        cv_tag = "-"
+                        circle_tag = "-"
+                        if not ref_meta:
+                            try:
+                                import mutagen
+                                a_meta = mutagen.File(full_path)
+                                if a_meta and a_meta.tags:
+                                    if "©ART" in a_meta.tags:
+                                        cv_tag = str(a_meta.tags["©ART"][0])
+                                    elif "artist" in a_meta.tags:
+                                        cv_tag = str(a_meta.tags["artist"][0])
+                                    if "©alb" in a_meta.tags:
+                                        circle_tag = str(a_meta.tags["©alb"][0])
+                                    elif "album" in a_meta.tags:
+                                        circle_tag = str(a_meta.tags["album"][0])
+                            except Exception:
+                                pass
+
+                        cv_display = ref_meta.get("cv", "-") if ref_meta else cv_tag
+                        circle_display = ref_meta.get("circle", "-") if ref_meta else circle_tag
                         cover_to_use = local_cover or (ref_meta.get("cover_url", "") if ref_meta else "")
                         if not cover_to_use and rjid_detected != "-":
                             cover_to_use = f"https://pic.weeabo0.xyz/{rjid_detected}_img_main.jpg"

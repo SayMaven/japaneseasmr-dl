@@ -439,10 +439,34 @@ class JapaneseASMRApp(
             self._load_history_view()
         elif target_name == "player":
             self._refresh_playlist_view()
+        elif target_name == "settings":
+            if hasattr(self, "var_download_dir"):
+                cur_d = os.path.abspath(get_download_dir())
+                self.var_download_dir.set(cur_d)
+                if hasattr(self, "entry_set_dir") and self.entry_set_dir.winfo_exists():
+                    self.entry_set_dir.delete(0, "end")
+                    self.entry_set_dir.insert(0, cur_d)
 
     def open_settings_dialog(self):
         """Buka tab Pengaturan secara langsung di viewport utama."""
         self._select_page("settings")
+
+    def sync_download_directory(self, new_dir):
+        """Menyinkronkan folder unduhan ke config, label footer sidebar, input tab settings, dan refresh playlist."""
+        if not new_dir:
+            return
+        abs_d = os.path.abspath(new_dir)
+        from config_manager import set_download_dir
+        set_download_dir(abs_d)
+        if hasattr(self, "lbl_current_dir") and self.lbl_current_dir.winfo_exists():
+            self.lbl_current_dir.configure(text=t("lbl_save_location", path=abs_d))
+        if hasattr(self, "var_download_dir"):
+            self.var_download_dir.set(abs_d)
+        if hasattr(self, "entry_set_dir") and self.entry_set_dir.winfo_exists():
+            self.entry_set_dir.delete(0, "end")
+            self.entry_set_dir.insert(0, abs_d)
+        if hasattr(self, "_refresh_playlist_view"):
+            self._refresh_playlist_view()
 
     def retranslate_ui(self):
         """Menerapkan terjemahan bahasa aktif ke seluruh elemen GUI seketika tanpa emoji."""
@@ -547,12 +571,10 @@ class JapaneseASMRApp(
 
     def _change_download_dir(self):
         from tkinter import filedialog
-        from config_manager import set_download_dir
         cur_dir = os.path.abspath(get_download_dir())
         d = filedialog.askdirectory(initialdir=cur_dir)
         if d:
-            set_download_dir(os.path.abspath(d))
-            self.lbl_current_dir.configure(text=t("lbl_save_location", path=os.path.abspath(d)))
+            self.sync_download_directory(d)
 
     def _on_app_close(self):
         """Menutup seluruh aplikasi dan mematikan background player secara bersih."""

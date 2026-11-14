@@ -67,9 +67,18 @@ class NativeMFPlayer:
             self.PauseFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[4])
             self.StopFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p)(vtable[5])
             self.SetPosFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(GUID), ctypes.POINTER(PROPVARIANT))(vtable[7])
-            self.SetVolFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_float)(vtable[10])
+            self.SetRateFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_float)(vtable[10])
+            self.GetRateFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_float))(vtable[11])
+            self.GetVolFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_float))(vtable[19])
+            self.SetVolFunc = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.c_float)(vtable[20])
             self.RelFunc = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
             self.seek_offset_sec = 0.0
+
+            # Pastikan kecepatan putar selalu normal 1.0x (bukan melambat akibat bug SetRate)
+            try:
+                self.SetRateFunc(self.player_ptr, ctypes.c_float(1.0))
+            except Exception:
+                pass
             return True
         except Exception:
             return False
@@ -120,9 +129,36 @@ class NativeMFPlayer:
         if self.player_ptr.value:
             try:
                 f_vol = max(0.0, min(1.0, float(vol_pct) / 100.0))
-                self.SetVolFunc(self.player_ptr, f_vol)
+                self.SetVolFunc(self.player_ptr, ctypes.c_float(f_vol))
             except Exception:
                 pass
+
+    def get_volume(self):
+        if self.player_ptr.value:
+            try:
+                v = ctypes.c_float(1.0)
+                if self.GetVolFunc(self.player_ptr, ctypes.byref(v)) == 0:
+                    return int(round(v.value * 100))
+            except Exception:
+                pass
+        return 100
+
+    def set_rate(self, rate=1.0):
+        if self.player_ptr.value:
+            try:
+                self.SetRateFunc(self.player_ptr, ctypes.c_float(rate))
+            except Exception:
+                pass
+
+    def get_rate(self):
+        if self.player_ptr.value:
+            try:
+                r = ctypes.c_float(1.0)
+                if self.GetRateFunc(self.player_ptr, ctypes.byref(r)) == 0:
+                    return r.value
+            except Exception:
+                pass
+        return 1.0
 
     def get_position_sec(self):
         if not self.is_playing:

@@ -459,9 +459,14 @@ class SettingsTabMixin:
         self.lbl_desc_sw3.pack(anchor="w", padx=(44, 0))
 
     def _browse_download_dir(self):
-        d = filedialog.askdirectory(initialdir=self.var_download_dir.get())
+        initial = self.var_download_dir.get() or get_download_dir()
+        d = filedialog.askdirectory(initialdir=initial)
         if d:
-            self.var_download_dir.set(os.path.abspath(d))
+            abs_d = os.path.abspath(d)
+            self.var_download_dir.set(abs_d)
+            if hasattr(self, "entry_set_dir") and self.entry_set_dir.winfo_exists():
+                self.entry_set_dir.delete(0, "end")
+                self.entry_set_dir.insert(0, abs_d)
 
     # ==================== SUBTAB 2: DOWNLOAD & ENGINE ====================
     def _build_subtab_download(self, parent):
@@ -969,8 +974,11 @@ class SettingsTabMixin:
         new_lang = self.var_language.get()
         old_lang = get_active_language()
 
+        raw_dir = self.entry_set_dir.get().strip() if hasattr(self, "entry_set_dir") else self.var_download_dir.get().strip()
+        new_dir = os.path.abspath(raw_dir) if raw_dir else os.path.abspath(get_download_dir())
+
         self.cfg["language"] = new_lang
-        self.cfg["download_dir"] = self.var_download_dir.get()
+        self.cfg["download_dir"] = new_dir
         self.cfg["use_detailed_filename"] = self.var_detailed_name.get()
         self.cfg["notify_popup"] = self.var_notify_popup.get()
         self.cfg["auto_clipboard"] = self.var_auto_clipboard.get()
@@ -979,8 +987,12 @@ class SettingsTabMixin:
         self.cfg["audio_format"] = self.var_audio_format.get()
 
         save_config(self.cfg)
-        set_download_dir(self.var_download_dir.get())
         set_audio_format(self.var_audio_format.get())
+
+        if hasattr(self, "sync_download_directory"):
+            self.sync_download_directory(new_dir)
+        else:
+            set_download_dir(new_dir)
 
         if hasattr(self, "opt_detailed_name"):
             self.opt_detailed_name.set(self.var_detailed_name.get())
