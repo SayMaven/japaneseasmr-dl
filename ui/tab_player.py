@@ -600,6 +600,15 @@ class PlayerTabMixin:
                 pass
 
         if cover_cand:
+            def _apply_player_cover(p_img):
+                try:
+                    if hasattr(self, "player_canvas") and self.player_canvas.winfo_exists():
+                        self.player_preview_image = ImageTk.PhotoImage(p_img)
+                        self.player_canvas.delete("all")
+                        self.player_canvas.create_image(145, 92, image=self.player_preview_image)
+                except Exception:
+                    pass
+
             def _load_c():
                 try:
                     req = urllib.request.Request(cover_cand, headers={"Referer": REFERER, "User-Agent": USER_AGENT})
@@ -610,9 +619,10 @@ class PlayerTabMixin:
                     if cache_file:
                         os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
                         pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
-                    self.player_preview_image = ImageTk.PhotoImage(pil_img)
-                    self.player_canvas.delete("all")
-                    self.player_canvas.create_image(145, 92, image=self.player_preview_image)
+                    try:
+                        self.after(0, lambda: _apply_player_cover(pil_img))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
             threading.Thread(target=_load_c, daemon=True).start()

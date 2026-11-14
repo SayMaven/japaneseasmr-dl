@@ -248,14 +248,14 @@ class JapaneseASMRApp(
         self.lbl_brand_sub.pack(fill="x", pady=(2, 0))
 
         # 2. Navigasi 4 Tab Vertikal (Zero Emoji, Ikon Vektor Konsisten)
-        nav_header = ctk.CTkLabel(
+        self.lbl_nav_header = ctk.CTkLabel(
             self.sidebar,
-            text="NAVIGASI UTAMA",
+            text=t("nav_main_header"),
             font=(FONT_BODY[0], 8, "bold"),
             text_color=TEXT_MUTED,
             anchor="w",
         )
-        nav_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_XS))
+        self.lbl_nav_header.pack(fill="x", padx=SPACE_LG, pady=(SPACE_SM, SPACE_XS))
 
         self.btn_nav_queue = ctk.CTkButton(
             self.sidebar,
@@ -451,6 +451,8 @@ class JapaneseASMRApp(
         """Menerapkan terjemahan bahasa aktif ke seluruh elemen GUI seketika tanpa emoji."""
         self.title(f"{t('app_title')} - v1.2.0")
 
+        if hasattr(self, "lbl_nav_header"):
+            self.lbl_nav_header.configure(text=t("nav_main_header"))
         if hasattr(self, "btn_nav_queue"):
             self.btn_nav_queue.configure(text=f"  {t('tab_queue')}")
         if hasattr(self, "btn_nav_history"):

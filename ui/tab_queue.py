@@ -435,7 +435,10 @@ class QueueTabMixin:
         return val_lbl
 
     def _save_options(self):
-        self.config["use_detailed_filename"] = self.opt_detailed_name.get()
+        val = self.opt_detailed_name.get()
+        self.config["use_detailed_filename"] = val
+        if hasattr(self, "var_detailed_name"):
+            self.var_detailed_name.set(val)
         save_config(self.config)
 
     def _log(self, text):

@@ -385,6 +385,15 @@ class HistoryTabMixin:
                 except Exception:
                     pass
 
+            def _apply_online_cover(p_img):
+                try:
+                    if hasattr(self, "hist_canvas") and self.hist_canvas.winfo_exists():
+                        self.hist_preview_image = ImageTk.PhotoImage(p_img)
+                        self.hist_canvas.delete("all")
+                        self.hist_canvas.create_image(145, 97, image=self.hist_preview_image)
+                except Exception:
+                    pass
+
             def load_online_cover():
                 cover_url = h.get("cover_url", f"https://pic.weeabo0.xyz/{rjid}_img_main.jpg")
                 try:
@@ -395,9 +404,10 @@ class HistoryTabMixin:
                     pil_img.thumbnail((290, 195))
                     os.makedirs(os.path.join(".cache", "covers"), exist_ok=True)
                     pil_img.convert("RGB").save(cache_file, "JPEG", quality=85)
-                    self.hist_preview_image = ImageTk.PhotoImage(pil_img)
-                    self.hist_canvas.delete("all")
-                    self.hist_canvas.create_image(145, 97, image=self.hist_preview_image)
+                    try:
+                        self.after(0, lambda: _apply_online_cover(pil_img))
+                    except Exception:
+                        pass
                 except Exception:
                     pass
 

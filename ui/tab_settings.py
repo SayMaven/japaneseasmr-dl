@@ -134,7 +134,7 @@ class SettingsTabMixin:
 
         self.lbl_settings_header_desc = ctk.CTkLabel(
             header_frame,
-            text="Kelola preferensi unduhan, format audio, pemeliharaan cache, dan konfigurasi engine.",
+            text=t("settings_subtitle"),
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
             anchor="w",
@@ -214,7 +214,7 @@ class SettingsTabMixin:
 
         self.btn_settings_reset = ctk.CTkButton(
             footer_frame,
-            text=" Reset Form",
+            text=f" {t('btn_reset_form')}",
             image=get_icon("rotate-ccw", size=(16, 16)),
             font=FONT_BODY,
             fg_color=SURFACE_ELEVATED,
@@ -242,6 +242,8 @@ class SettingsTabMixin:
                 scrollbar_button_hover_color=BORDER_ACTIVE,
             )
             sf.grid(row=0, column=0, sticky="nsew")
+            if s_id != "general":
+                sf.grid_remove()
             self.subtab_frames[s_id] = sf
 
         # Build each subtab ONCE into its persistent scrollable frame
@@ -254,12 +256,12 @@ class SettingsTabMixin:
         self._prev_settings_subtab = "general"
         self._switch_settings_subtab("general")
 
-        # Warm up background version & cache checks so first clicks are instant
+        # Warm up background version & cache checks asynchronously
         self._refresh_ytdlp_version_async()
         self._refresh_cache_stats()
 
     def _switch_settings_subtab(self, subtab_name: str):
-        """Beralih subtab seketika (< 15ms) via stack raising (.lift()) tanpa destroy widget atau lag."""
+        """Beralih subtab seketika via unmapping frame tersembunyi (grid_remove())."""
         prev = getattr(self, "_prev_settings_subtab", None)
         self.current_settings_subtab = subtab_name
         self._prev_settings_subtab = subtab_name
@@ -270,14 +272,15 @@ class SettingsTabMixin:
         if subtab_name in self.settings_subtab_btns:
             self.settings_subtab_btns[subtab_name].configure(fg_color=ACCENT_PRIMARY, text_color="#ffffff")
 
-        # Angkat frame subtab ke posisi teratas seketika
-        if subtab_name in self.subtab_frames:
-            self.subtab_frames[subtab_name].lift()
+        # Tampilkan frame aktif dan sembunyikan frame lainnya dengan grid_remove()
+        for sid, frame in self.subtab_frames.items():
+            if sid == subtab_name:
+                frame.grid(row=0, column=0, sticky="nsew")
+            else:
+                frame.grid_remove()
 
-        # Update konten subtab jika diperlukan
-        if subtab_name == "download":
-            self._refresh_ytdlp_version_async()
-        elif subtab_name == "cache":
+        # Update cache stats jika membuka tab cache
+        if subtab_name == "cache":
             self._refresh_cache_stats()
 
     # ==================== SUBTAB 1: UMUM ====================
@@ -386,7 +389,7 @@ class SettingsTabMixin:
         p_opts = ctk.CTkFrame(card_opts, fg_color="transparent")
         p_opts.pack(fill="x", padx=SPACE_LG, pady=SPACE_LG)
 
-        self.lbl_set_opts_title = ctk.CTkLabel(p_opts, text="Preferensi Otomatisasi & Notifikasi", font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
+        self.lbl_set_opts_title = ctk.CTkLabel(p_opts, text=t("lbl_settings_automation"), font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
         self.lbl_set_opts_title.pack(fill="x", pady=(0, 6))
 
         # Switch 1: Detailed Name
@@ -404,7 +407,7 @@ class SettingsTabMixin:
         self.sw_detailed.pack(anchor="w")
         self.lbl_desc_sw1 = ctk.CTkLabel(
             f_sw1,
-            text="Gunakan format nama folder lengkap beserta kode RJ",
+            text=t("lbl_detailed_name_desc"),
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
             anchor="w",
@@ -426,7 +429,7 @@ class SettingsTabMixin:
         self.sw_notify.pack(anchor="w")
         self.lbl_desc_sw2 = ctk.CTkLabel(
             f_sw2,
-            text="Tampilkan dialog konfirmasi saat unduhan berhasil selesai",
+            text=t("lbl_notify_popup_desc"),
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
             anchor="w",
@@ -448,7 +451,7 @@ class SettingsTabMixin:
         self.sw_clip.pack(anchor="w")
         self.lbl_desc_sw3 = ctk.CTkLabel(
             f_sw3,
-            text="Otomatis paste tautan saat mendeteksi URL DLsite di clipboard",
+            text=t("lbl_auto_clipboard_desc"),
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
             anchor="w",
@@ -561,7 +564,7 @@ class SettingsTabMixin:
 
         self.lbl_ytdlp_ver = ctk.CTkLabel(
             p_upd,
-            text="Versi yt-dlp Terpasang: Memeriksa...",
+            text=t("lbl_ytdlp_ver_installed", ver=t("lbl_ytdlp_ver_checking")),
             font=FONT_CODE,
             text_color=STATUS_INFO,
             anchor="w",
@@ -588,7 +591,7 @@ class SettingsTabMixin:
 
         self.lbl_ytdlp_status_tab = ctk.CTkLabel(
             upd_action_row,
-            text="Siap memeriksa rilis terbaru",
+            text=t("status_ytdlp_ready"),
             font=FONT_CAPTION,
             text_color=TEXT_MUTED,
         )
@@ -598,13 +601,13 @@ class SettingsTabMixin:
         """Memeriksa versi yt-dlp di latar belakang secara thread-safe."""
         if self._cached_ytdlp_ver and not force:
             if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-                self.lbl_ytdlp_ver.configure(text=f"Versi yt-dlp Terpasang: {self._cached_ytdlp_ver}")
+                self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=self._cached_ytdlp_ver))
             return
         if getattr(self, "_is_checking_ytdlp", False):
             return
         self._is_checking_ytdlp = True
         if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-            self.lbl_ytdlp_ver.configure(text="Versi yt-dlp Terpasang: Memeriksa...")
+            self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=t("lbl_ytdlp_ver_checking")))
 
         def _worker():
             try:
@@ -622,17 +625,18 @@ class SettingsTabMixin:
         """Polling dari thread utama untuk memperbarui label versi yt-dlp secara thread-safe."""
         if self._cached_ytdlp_ver:
             if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-                self.lbl_ytdlp_ver.configure(text=f"Versi yt-dlp Terpasang: {self._cached_ytdlp_ver}")
+                self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=self._cached_ytdlp_ver))
         elif getattr(self, "_is_checking_ytdlp", False):
-            self.after(150, self._poll_ytdlp_version)
+            self.after(200, self._poll_ytdlp_version)
 
     def _do_update_ytdlp_tab(self):
         self.btn_update_ytdlp_tab.configure(state="disabled")
-        self.lbl_ytdlp_status_tab.configure(text="Sedang mengunduh rilis terbaru...", text_color=STATUS_INFO)
+        self.lbl_ytdlp_status_tab.configure(text=t("status_ytdlp_updating"), text_color=STATUS_INFO)
         self._ytdlp_update_result = None
 
+        channel = self.var_ytdlp_channel.get() if hasattr(self, "var_ytdlp_channel") else "stable"
+
         def _worker():
-            channel = self.var_ytdlp_channel.get()
             success, status_code, msg = update_ytdlp_engine(channel=channel)
             ver = get_ytdlp_version() if success else None
             self._ytdlp_update_result = (success, status_code, msg, ver)
@@ -650,17 +654,17 @@ class SettingsTabMixin:
             if success:
                 self._cached_ytdlp_ver = ver
                 if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
-                    self.lbl_ytdlp_ver.configure(text=f"Versi yt-dlp Terpasang: {ver}")
+                    self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=ver))
                 if hasattr(self, "lbl_ytdlp_status_tab") and self.lbl_ytdlp_status_tab.winfo_exists():
                     self.lbl_ytdlp_status_tab.configure(text=f"Sukses diperbarui ke: {ver}", text_color=STATUS_SUCCESS)
                 show_dark_info(self, "Pembaruan Berhasil", f"Engine yt-dlp berhasil diperbarui!\n\nVersi aktif: {ver}")
             elif status_code == "already_latest":
                 if hasattr(self, "lbl_ytdlp_status_tab") and self.lbl_ytdlp_status_tab.winfo_exists():
-                    self.lbl_ytdlp_status_tab.configure(text="Sudah versi terbaru", text_color=TEXT_SECONDARY)
+                    self.lbl_ytdlp_status_tab.configure(text=t("status_ytdlp_latest"), text_color=TEXT_SECONDARY)
                 show_dark_info(self, "Info Pembaruan", msg)
             else:
                 if hasattr(self, "lbl_ytdlp_status_tab") and self.lbl_ytdlp_status_tab.winfo_exists():
-                    self.lbl_ytdlp_status_tab.configure(text="Pembaruan gagal", text_color=STATUS_DANGER)
+                    self.lbl_ytdlp_status_tab.configure(text=t("status_ytdlp_failed"), text_color=STATUS_DANGER)
                 show_dark_error(self, "Pembaruan Gagal", f"Gagal memperbarui engine yt-dlp.\n\nError: {msg}")
         else:
             self.after(200, self._poll_ytdlp_update)
@@ -680,16 +684,16 @@ class SettingsTabMixin:
         p_stats = ctk.CTkFrame(card_stats, fg_color="transparent")
         p_stats.pack(fill="x", padx=SPACE_LG, pady=SPACE_LG)
 
-        self.lbl_set_cache_title = ctk.CTkLabel(p_stats, text="Ukuran Cache & Penyimpanan", font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
+        self.lbl_set_cache_title = ctk.CTkLabel(p_stats, text=t("lbl_storage_statistics"), font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
         self.lbl_set_cache_title.pack(fill="x", pady=(0, 8))
 
-        self.lbl_cache_covers = ctk.CTkLabel(p_stats, text="• Cache Thumbnail Cover: Memuat...", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
+        self.lbl_cache_covers = ctk.CTkLabel(p_stats, text=t("lbl_stat_covers", count=0, size="0 MB"), font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
         self.lbl_cache_covers.pack(fill="x", pady=3)
 
-        self.lbl_cache_temp = ctk.CTkLabel(p_stats, text="• Cache Berkas Sementara: Memuat...", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
+        self.lbl_cache_temp = ctk.CTkLabel(p_stats, text=t("lbl_stat_temp", count=0, size="0 MB"), font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
         self.lbl_cache_temp.pack(fill="x", pady=3)
 
-        self.lbl_cache_hist = ctk.CTkLabel(p_stats, text="• Total Riwayat Unduhan: Memuat...", font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
+        self.lbl_cache_hist = ctk.CTkLabel(p_stats, text=t("lbl_stat_hist", count=0), font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
         self.lbl_cache_hist.pack(fill="x", pady=3)
 
         # Card 2: Tindakan Pemeliharaan
@@ -705,7 +709,7 @@ class SettingsTabMixin:
         p_act = ctk.CTkFrame(card_actions, fg_color="transparent")
         p_act.pack(fill="x", padx=SPACE_LG, pady=SPACE_LG)
 
-        self.lbl_set_maint_title = ctk.CTkLabel(p_act, text="Tindakan Pemeliharaan", font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
+        self.lbl_set_maint_title = ctk.CTkLabel(p_act, text=t("lbl_maintenance_actions"), font=FONT_SECTION, text_color=TEXT_PRIMARY, anchor="w")
         self.lbl_set_maint_title.pack(fill="x", pady=(0, 10))
 
         self.btn_clear_cov = ctk.CTkButton(
@@ -751,24 +755,43 @@ class SettingsTabMixin:
         self.btn_clear_hst.pack(fill="x", pady=(4, 0))
 
     def _refresh_cache_stats(self):
-        """Memuat ukuran cache secara langsung dan cepat (~3ms)."""
-        try:
-            info = get_cache_size_info()
-            histories = load_history()
-            c_count = info.get("covers_count", 0)
-            c_size = info.get("covers_size", "0 MB")
-            t_count = info.get("temp_count", 0)
-            t_size = info.get("temp_size", "0 MB")
-            h_len = len(histories)
+        """Memuat ukuran cache di latar belakang agar antarmuka tidak membeku."""
+        if getattr(self, "_is_checking_cache", False):
+            return
+        self._is_checking_cache = True
+        self._cache_stats_result = None
 
+        def _worker():
+            try:
+                info = get_cache_size_info()
+                histories = load_history()
+                c_count = info.get("covers_count", 0)
+                c_size = info.get("covers_size", "0 MB")
+                t_count = info.get("temp_count", 0)
+                t_size = info.get("temp_size", "0 MB")
+                h_len = len(histories)
+                self._cache_stats_result = (c_count, c_size, t_count, t_size, h_len)
+            except Exception:
+                pass
+            finally:
+                self._is_checking_cache = False
+
+        threading.Thread(target=_worker, daemon=True).start()
+        self._poll_cache_stats()
+
+    def _poll_cache_stats(self):
+        """Polling dari thread utama untuk memperbarui label statistik cache."""
+        if getattr(self, "_cache_stats_result", None) is not None:
+            c_count, c_size, t_count, t_size, h_len = self._cache_stats_result
+            self._cache_stats_result = None
             if hasattr(self, "lbl_cache_covers") and self.lbl_cache_covers.winfo_exists():
-                self.lbl_cache_covers.configure(text=f"• Cache Thumbnail Cover: {c_count} file ({c_size})")
+                self.lbl_cache_covers.configure(text=t("lbl_stat_covers", count=c_count, size=c_size))
             if hasattr(self, "lbl_cache_temp") and self.lbl_cache_temp.winfo_exists():
-                self.lbl_cache_temp.configure(text=f"• Cache Berkas Sementara: {t_count} file ({t_size})")
+                self.lbl_cache_temp.configure(text=t("lbl_stat_temp", count=t_count, size=t_size))
             if hasattr(self, "lbl_cache_hist") and self.lbl_cache_hist.winfo_exists():
-                self.lbl_cache_hist.configure(text=f"• Total Riwayat Unduhan: {h_len} entri")
-        except Exception:
-            pass
+                self.lbl_cache_hist.configure(text=t("lbl_stat_hist", count=h_len))
+        elif getattr(self, "_is_checking_cache", False):
+            self.after(150, self._poll_cache_stats)
 
     def _do_clear_covers_tab(self):
         c, s = clear_cover_cache()
@@ -810,20 +833,21 @@ class SettingsTabMixin:
         ctk.CTkLabel(p_abt, text="JapaneseASMR Downloader & Player", font=FONT_TITLE, text_color=TEXT_PRIMARY).pack(pady=(0, 2))
         ctk.CTkLabel(p_abt, text="Versi 1.2.0 • Windows Pure Desktop GUI", font=FONT_CAPTION, text_color=STATUS_INFO).pack(pady=(0, 12))
 
-        ctk.CTkLabel(
+        self.lbl_about_app_desc = ctk.CTkLabel(
             p_abt,
-            text="Aplikasi utilitas pengunduh dan pemutar audio native untuk karya suara ASMR Jepang.\nDilengkapi Windows Media Foundation playback engine, manajemen CUE chapter, dan Tokyo Night UI modern.",
+            text=t("about_app_desc"),
             font=FONT_BODY,
             text_color=TEXT_SECONDARY,
             justify="center",
-        ).pack(pady=(0, 16))
+        )
+        self.lbl_about_app_desc.pack(pady=(0, 16))
 
         links_row = ctk.CTkFrame(p_abt, fg_color="transparent")
         links_row.pack(pady=(0, 8))
 
-        ctk.CTkButton(
+        self.btn_github = ctk.CTkButton(
             links_row,
-            text=" Repositori GitHub",
+            text=f" {t('btn_github_repo')}",
             image=get_icon("info", size=(16, 16)),
             font=FONT_BODY_BOLD,
             fg_color=SURFACE_ELEVATED,
@@ -832,11 +856,12 @@ class SettingsTabMixin:
             corner_radius=RADIUS_BUTTON,
             height=34,
             command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl"),
-        ).pack(side="left", padx=SPACE_SM)
+        )
+        self.btn_github.pack(side="left", padx=SPACE_SM)
 
-        ctk.CTkButton(
+        self.btn_issues = ctk.CTkButton(
             links_row,
-            text=" Lapor Masalah (Issues)",
+            text=f" {t('btn_report_issues')}",
             image=get_icon("info", size=(16, 16)),
             font=FONT_BODY,
             fg_color=SURFACE_ELEVATED,
@@ -845,13 +870,16 @@ class SettingsTabMixin:
             corner_radius=RADIUS_BUTTON,
             height=34,
             command=lambda: webbrowser.open("https://github.com/SayMaven/japaneseasmr-dl/issues"),
-        ).pack(side="left", padx=SPACE_SM)
+        )
+        self.btn_issues.pack(side="left", padx=SPACE_SM)
 
     # ==================== RETRANSLATE SETTINGS TAB ====================
     def retranslate_settings_tab(self):
         """Menerapkan terjemahan bahasa baru ke seluruh elemen Tab Pengaturan secara real-time."""
         if hasattr(self, "lbl_settings_header_title"):
             self.lbl_settings_header_title.configure(text=t("settings_title"))
+        if hasattr(self, "lbl_settings_header_desc"):
+            self.lbl_settings_header_desc.configure(text=t("settings_subtitle"))
 
         if hasattr(self, "settings_subtab_btns"):
             sub_titles = {
@@ -875,12 +903,20 @@ class SettingsTabMixin:
             self.lbl_set_dir_desc.configure(text=t("lbl_storage_folder_desc"))
         if hasattr(self, "btn_set_browse"):
             self.btn_set_browse.configure(text=f" {t('btn_browse')}")
+        if hasattr(self, "lbl_set_opts_title"):
+            self.lbl_set_opts_title.configure(text=t("lbl_settings_automation"))
         if hasattr(self, "sw_detailed"):
             self.sw_detailed.configure(text=t("chk_detailed_name"))
+        if hasattr(self, "lbl_desc_sw1"):
+            self.lbl_desc_sw1.configure(text=t("lbl_detailed_name_desc"))
         if hasattr(self, "sw_notify"):
             self.sw_notify.configure(text=t("chk_notify_popup"))
+        if hasattr(self, "lbl_desc_sw2"):
+            self.lbl_desc_sw2.configure(text=t("lbl_notify_popup_desc"))
         if hasattr(self, "sw_clip"):
             self.sw_clip.configure(text=t("chk_auto_clipboard"))
+        if hasattr(self, "lbl_desc_sw3"):
+            self.lbl_desc_sw3.configure(text=t("lbl_auto_clipboard_desc"))
 
         # Download
         if hasattr(self, "lbl_set_fmt_title"):
@@ -895,18 +931,38 @@ class SettingsTabMixin:
             self.lbl_set_ytdlp_title.configure(text=t("lbl_ytdlp_engine"))
         if hasattr(self, "btn_update_ytdlp_tab"):
             self.btn_update_ytdlp_tab.configure(text=f" {t('btn_update_ytdlp')}")
+        if hasattr(self, "lbl_ytdlp_ver"):
+            ver_text = self._cached_ytdlp_ver if self._cached_ytdlp_ver else t("lbl_ytdlp_ver_checking")
+            self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=ver_text))
+        if hasattr(self, "lbl_ytdlp_status_tab"):
+            self.lbl_ytdlp_status_tab.configure(text=t("status_ytdlp_ready"))
 
         # Cache
+        if hasattr(self, "lbl_set_cache_title"):
+            self.lbl_set_cache_title.configure(text=t("lbl_storage_statistics"))
+        if hasattr(self, "lbl_set_maint_title"):
+            self.lbl_set_maint_title.configure(text=t("lbl_maintenance_actions"))
         if hasattr(self, "btn_clear_cov"):
             self.btn_clear_cov.configure(text=f" {t('btn_clear_covers')}")
         if hasattr(self, "btn_clear_tmp"):
             self.btn_clear_tmp.configure(text=f" {t('btn_clear_temp')}")
         if hasattr(self, "btn_clear_hst"):
             self.btn_clear_hst.configure(text=f" {t('btn_clear_all_history')}")
+        self._refresh_cache_stats()
+
+        # About
+        if hasattr(self, "lbl_about_app_desc"):
+            self.lbl_about_app_desc.configure(text=t("about_app_desc"))
+        if hasattr(self, "btn_github"):
+            self.btn_github.configure(text=f" {t('btn_github_repo')}")
+        if hasattr(self, "btn_issues"):
+            self.btn_issues.configure(text=f" {t('btn_report_issues')}")
 
         # Footer
         if hasattr(self, "btn_settings_save"):
             self.btn_settings_save.configure(text=f" {t('btn_save_settings')}")
+        if hasattr(self, "btn_settings_reset"):
+            self.btn_settings_reset.configure(text=f" {t('btn_reset_form')}")
 
     # ==================== SIMPAN & RESET ====================
     def _save_settings_tab(self):
@@ -938,7 +994,7 @@ class SettingsTabMixin:
             self.retranslate_settings_tab()
 
         # Tampilkan status inline feedback
-        self.lbl_settings_saved_status.configure(text="Pengaturan berhasil disimpan!", text_color=STATUS_SUCCESS)
+        self.lbl_settings_saved_status.configure(text=t("msg_settings_saved"), text_color=STATUS_SUCCESS)
         self.after(3500, lambda: self.lbl_settings_saved_status.configure(text=""))
 
     def _reset_settings_form(self):
@@ -958,5 +1014,5 @@ class SettingsTabMixin:
         if hasattr(self, "cbo_conn"):
             self.cbo_conn.set(str(self.var_connections.get()))
 
-        self.lbl_settings_saved_status.configure(text="Form dikembalikan ke pengaturan tersimpan", text_color=TEXT_SECONDARY)
+        self.lbl_settings_saved_status.configure(text=t("msg_settings_reset"), text_color=TEXT_SECONDARY)
         self.after(3000, lambda: self.lbl_settings_saved_status.configure(text=""))
