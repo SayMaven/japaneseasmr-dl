@@ -782,11 +782,12 @@ def resolve_input_to_rjid(input_str):
     return clean_val
 
 
-def fetch_japaneseasmr_chapters(rj_id_or_url):
+def fetch_japaneseasmr_chapters(rj_id_or_url, meta=None):
     """
     Mengambil daftar penanda bab (chapters / tracklist) langsung dari situs japaneseasmr.com:
     - Jika input berupa URL pos japaneseasmr.com (misal: https://japaneseasmr.com/150854/), unduh pos tersebut.
     - Jika input berupa Kode RJ (misal: RJ01691063), cari di japaneseasmr.com/?s={rj_id} untuk menemukan tautan pos terkait.
+    - Mendukung parameter opsional meta (dict) untuk mempercepat pencarian jika URL pos sudah tersimpan.
     - Ekstrak waktu mulai (milidetik) dan judul track dari tabel .chapter_list atau konten pos.
     Mengembalikan: list of dict [{"start": ms, "title": "..."}]
     """
@@ -804,30 +805,36 @@ def fetch_japaneseasmr_chapters(rj_id_or_url):
     }
 
     target_url = None
-    if clean_target.startswith("http://") or clean_target.startswith("https://"):
-        target_url = clean_target
-    else:
-        clean_id = clean_target.upper()
-        search_url = f"https://japaneseasmr.com/?s={clean_id}"
-        try:
-            req = urllib.request.Request(search_url, headers=headers)
-            with urllib.request.urlopen(req, timeout=8) as resp:
-                s_html = resp.read().decode("utf-8", errors="replace")
-            soup_s = BeautifulSoup(s_html, "html.parser")
-            entries = soup_s.find_all(class_=re.compile(r"entry-title|post-title"))
-            for ent in entries:
-                a_tag = ent.find("a")
-                if a_tag and a_tag.get("href"):
-                    if clean_id in ent.get_text().upper() or not target_url:
-                        target_url = a_tag["href"]
-                        if clean_id in ent.get_text().upper():
-                            break
-            if not target_url:
-                posts = re.findall(r"https://japaneseasmr\.com/\d+/", s_html)
-                if posts:
-                    target_url = posts[0]
-        except Exception:
-            return []
+    if isinstance(meta, dict):
+        cand_url = meta.get("japaneseasmr_url") or meta.get("post_url") or meta.get("url") or ""
+        if cand_url.startswith("http://") or cand_url.startswith("https://"):
+            target_url = cand_url
+
+    if not target_url:
+        if clean_target.startswith("http://") or clean_target.startswith("https://"):
+            target_url = clean_target
+        else:
+            clean_id = clean_target.upper()
+            search_url = f"https://japaneseasmr.com/?s={clean_id}"
+            try:
+                req = urllib.request.Request(search_url, headers=headers)
+                with urllib.request.urlopen(req, timeout=8) as resp:
+                    s_html = resp.read().decode("utf-8", errors="replace")
+                soup_s = BeautifulSoup(s_html, "html.parser")
+                entries = soup_s.find_all(class_=re.compile(r"entry-title|post-title"))
+                for ent in entries:
+                    a_tag = ent.find("a")
+                    if a_tag and a_tag.get("href"):
+                        if clean_id in ent.get_text().upper() or not target_url:
+                            target_url = a_tag["href"]
+                            if clean_id in ent.get_text().upper():
+                                break
+                if not target_url:
+                    posts = re.findall(r"https://japaneseasmr\.com/\d+/", s_html)
+                    if posts:
+                        target_url = posts[0]
+            except Exception:
+                return []
 
     if not target_url:
         return []
@@ -1118,7 +1125,7 @@ def write_cue_sheet(output_audio_path, chapters, meta=None):
         t_num = idx + 1
         t_title = ch.get("title") or f"Track {t_num}"
         safe_title = t_title.replace('"', "'")
-        ms = ch.get("start", 0)
+        ms = ch.get("start") if "start" in ch else ch.get("start_ms", 0)
         tot_sec = ms / 1000.0
         mm = int(tot_sec // 60)
         ss = int(tot_sec % 60)

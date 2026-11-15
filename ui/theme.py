@@ -88,7 +88,11 @@ def get_system_font_family(is_display: bool = False, is_mono: bool = False) -> s
 
     try:
         available = set(tkfont.families())
-        if is_display and "Segoe UI Variable Display" in available:
+        # Prioritaskan Yu Gothic UI pada Windows jika tersedia, agar karakter bahasa Jepang (Kanji/Kana)
+        # dan karakter Latin dirender secara seimbang dengan ketebalan normal yang ramping (mencegah fallback tebal Meiryo).
+        if "Yu Gothic UI" in available:
+            font_name = "Yu Gothic UI"
+        elif is_display and "Segoe UI Variable Display" in available:
             font_name = "Segoe UI Variable Display"
         elif not is_display and "Segoe UI Variable Text" in available:
             font_name = "Segoe UI Variable Text"
@@ -96,8 +100,8 @@ def get_system_font_family(is_display: bool = False, is_mono: bool = False) -> s
             font_name = "Inter"
         elif "Segoe UI" in available:
             font_name = "Segoe UI"
-        elif "Yu Gothic UI" in available:
-            font_name = "Yu Gothic UI"
+        elif "Meiryo UI" in available:
+            font_name = "Meiryo UI"
         else:
             font_name = "Arial"
     except Exception:

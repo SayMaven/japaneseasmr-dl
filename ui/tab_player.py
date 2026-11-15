@@ -245,7 +245,7 @@ class PlayerTabMixin:
         self.lbl_p_track_title = ctk.CTkLabel(
             track_info_frame,
             text="-",
-            font=FONT_BODY_BOLD,
+            font=FONT_BODY,
             text_color=TEXT_PRIMARY,
             anchor="w",
             wraplength=290,
