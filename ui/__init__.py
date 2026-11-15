@@ -7,10 +7,12 @@ from ui.dialogs import (
     show_dark_error,
     ask_dark_yesno,
 )
+from ui.constants import APP_VERSION
 from ui.icons import get_icon
 from ui.tab_settings import SettingsTabMixin
 
 __all__ = [
+    "APP_VERSION",
     "JapaneseASMRApp",
     "apply_dark_titlebar",
     "InAppModal",

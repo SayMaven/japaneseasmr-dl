@@ -1,5 +1,5 @@
 """
-In-App Toast Notification System for JapaneseASMR Downloader v1.2.0.
+In-App Toast Notification System for JapaneseASMR Downloader.
 Displays non-blocking floating card notifications in the bottom-right corner
 of the application window with a modern Tokyo Night aesthetic, auto-dismissal, and zero emojis.
 """

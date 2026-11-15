@@ -1,4 +1,5 @@
 import re
+from version import APP_VERSION
 
 REFERER = "https://japaneseasmr.com"
 USER_AGENT = (
@@ -19,4 +20,13 @@ RE_FRAG_PROGRESS = re.compile(
     r'\[download\]\s+Downloading\s+(?:item|fragment)\s+(\d+)\s+of\s+(\d+)',
     re.IGNORECASE,
 )
+
+__all__ = [
+    "APP_VERSION",
+    "REFERER",
+    "USER_AGENT",
+    "RE_YTDLP_PROGRESS",
+    "RE_ARIA2_PROGRESS",
+    "RE_FRAG_PROGRESS",
+]
 

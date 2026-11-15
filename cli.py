@@ -17,6 +17,7 @@ from config_manager import (
 )
 from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
 from i18n import t
+from ui.constants import APP_VERSION
 
 # Initialize ANSI terminal color support and UTF-8 stream encoding on Windows
 if sys.platform == "win32":
@@ -45,7 +46,7 @@ DEFAULT_ID = "RJ01673437"
 
 def print_banner():
     print(f"\n{CYAN}{BOLD}==================================================={RESET}")
-    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader v1.2.0 (Terminal CLI)   {RESET}")
+    print(f"{CYAN}{BOLD}   JapaneseASMR Downloader v{APP_VERSION} (Terminal CLI)   {RESET}")
     print(f"{CYAN}{BOLD}==================================================={RESET}\n")
 
 

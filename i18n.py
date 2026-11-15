@@ -16,6 +16,8 @@ import locale
 import os
 import sys
 
+from version import APP_VERSION
+
 # In-memory cached active language to avoid repetitive disk I/O
 _ACTIVE_LANG = None
 
@@ -67,7 +69,7 @@ TRANSLATIONS = {
         "about_app_desc": "Native downloader and audio player for Japanese ASMR works.\nEquipped with Windows Media Foundation playback engine, CUE chapter management, and modern Tokyo Night UI.",
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "Version 1.2.0 (Release Build) • Windows Edition",
+        "app_version": "Version {ver} (Release Build) • Windows Edition",
         "nav_main_header": "MAIN NAVIGATION",
         "btn_change_dir": "Change Folder",
         "btn_open_folder": "Open Folder",
@@ -301,7 +303,7 @@ TRANSLATIONS = {
         "about_app_desc": "Aplikasi utilitas pengunduh dan pemutar audio native untuk karya suara ASMR Jepang.\nDilengkapi Windows Media Foundation playback engine, manajemen CUE chapter, dan Tokyo Night UI modern.",
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "Versi 1.2.0 (Release Build) • Windows Edition",
+        "app_version": "Versi {ver} (Release Build) • Windows Edition",
         "btn_change_dir": "Ganti Folder",
         "btn_open_folder": "Buka Folder",
         "btn_settings": "Pengaturan",
@@ -534,7 +536,7 @@ TRANSLATIONS = {
         "about_app_desc": "日本のASMR作品向けネイティブダウンローダー＆オーディオプレイヤー。\nWindows Media Foundation再生エンジン、CUEチャプター管理、モダンなTokyo Night UIを搭載。",
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "バージョン 1.2.0 (Release Build) • Windows Edition",
+        "app_version": "バージョン {ver} (Release Build) • Windows Edition",
         "btn_change_dir": "フォルダ変更",
         "btn_open_folder": "フォルダを開く",
         "btn_settings": "設定",
@@ -767,7 +769,7 @@ TRANSLATIONS = {
         "about_app_desc": "面向日本ASMR作品的原生下载与音频播放工具。\n内置 Windows Media Foundation 播放引擎、CUE 分卷章节管理与现代化 Tokyo Night 主题界面。",
         # App Info & Header
         "app_title": "JapaneseASMR Downloader & Audio Player",
-        "app_version": "版本 1.2.0 (Release Build) • Windows Edition",
+        "app_version": "版本 {ver} (Release Build) • Windows Edition",
         "btn_change_dir": "更改目录",
         "btn_open_folder": "打开目录",
         "btn_settings": "设置",
@@ -1062,6 +1064,7 @@ def t(key, **kwargs):
     """Retrieve the localized string for a given translation key in the active language.
     
     Uses SafeDict to avoid KeyError exceptions if placeholders are missing.
+    Automatically provides common global variables like 'ver' (APP_VERSION).
     """
     lang = get_active_language()
     lang_dict = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
@@ -1070,9 +1073,12 @@ def t(key, **kwargs):
         # Fallback to English if the key is missing from the active language
         template = TRANSLATIONS["en"].get(key, key)
 
-    if kwargs and isinstance(template, str):
+    if isinstance(template, str):
+        format_kwargs = {"ver": APP_VERSION}
+        if kwargs:
+            format_kwargs.update(kwargs)
         try:
-            return template.format_map(SafeDict(kwargs))
+            return template.format_map(SafeDict(format_kwargs))
         except Exception:
             return template
     return template

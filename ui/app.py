@@ -8,6 +8,7 @@ from PIL import Image, ImageTk
 
 from config_manager import get_download_dir, load_config
 from i18n import t
+from ui.constants import APP_VERSION
 from ui.dialogs import apply_dark_titlebar
 from ui.downloader import DownloadWorkerMixin
 from ui.icons import get_icon
@@ -76,7 +77,7 @@ class JapaneseASMRApp(
             ctk.set_default_color_theme("blue")
 
         super().__init__()
-        self.title("JapaneseASMR Downloader & Player - v1.2.0")
+        self.title(f"JapaneseASMR Downloader & Player - v{APP_VERSION}")
         # Laptop-friendly responsive window geometry (default 1360x800, minsize 1120x660)
         self.geometry("1360x800")
         self.minsize(1120, 660)
@@ -232,7 +233,7 @@ class JapaneseASMRApp(
 
         self.lbl_brand_sub = ctk.CTkLabel(
             brand_frame,
-            text="Downloader & Player • v1.2.0",
+            text=f"Downloader & Player • v{APP_VERSION}",
             font=FONT_CAPTION,
             text_color=ACCENT_PRIMARY,
             anchor="w",
@@ -462,7 +463,7 @@ class JapaneseASMRApp(
 
     def retranslate_ui(self):
         """Apply active language translations across all GUI elements in real time."""
-        self.title(f"{t('app_title')} - v1.2.0")
+        self.title(f"{t('app_title')} - v{APP_VERSION}")
 
         if hasattr(self, "lbl_nav_header"):
             self.lbl_nav_header.configure(text=t("nav_main_header"))

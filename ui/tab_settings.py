@@ -26,6 +26,7 @@ from config_manager import (
     update_ytdlp_engine,
 )
 from i18n import get_active_language, get_available_languages, set_active_language, t
+from ui.constants import APP_VERSION
 from ui.dialogs import ask_dark_yesno, show_dark_error, show_dark_info
 from ui.icons import get_icon
 from ui.theme import (
@@ -834,7 +835,7 @@ class SettingsTabMixin:
         p_abt.pack(fill="x", padx=SPACE_XL, pady=SPACE_XL)
 
         ctk.CTkLabel(p_abt, text="JapaneseASMR Downloader & Player", font=FONT_TITLE, text_color=TEXT_PRIMARY).pack(pady=(0, 2))
-        ctk.CTkLabel(p_abt, text="Versi 1.2.0 • Windows Pure Desktop GUI", font=FONT_CAPTION, text_color=STATUS_INFO).pack(pady=(0, 12))
+        ctk.CTkLabel(p_abt, text=f"Versi {APP_VERSION} • Windows Pure Desktop GUI", font=FONT_CAPTION, text_color=STATUS_INFO).pack(pady=(0, 12))
 
         self.lbl_about_app_desc = ctk.CTkLabel(
             p_abt,
