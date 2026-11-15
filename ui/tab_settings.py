@@ -39,7 +39,6 @@ from ui.theme import (
     FONT_CAPTION,
     FONT_CODE,
     FONT_SECTION,
-    FONT_SUBTITLE,
     FONT_TITLE,
     RADIUS_BUTTON,
     RADIUS_CARD,

@@ -2,7 +2,6 @@
 SettingsDialog compatibility module for JapaneseASMR Downloader.
 Redirects external SettingsDialog calls to the integrated Settings tab.
 """
-from ui.tab_settings import SettingsTabMixin
 
 class SettingsDialog:
     """Compatibility shim: navigates to the integrated settings tab in the main application."""

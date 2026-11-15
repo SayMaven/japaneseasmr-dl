@@ -1,4 +1,3 @@
-import os
 import sys
 
 # Set Explicit AppUserModelID as early as possible before any UI modules initialize

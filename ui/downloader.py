@@ -17,10 +17,8 @@ from config_manager import (
     get_audio_format,
     get_bin_executable,
     get_download_dir,
-    write_cue_sheet,
 )
 from dlsite_scraper import (
-    fetch_dlsite_metadata,
     resolve_best_cover_url,
     sanitize_filename,
 )
@@ -32,7 +30,7 @@ from ui.constants import (
     RE_YTDLP_PROGRESS,
     USER_AGENT,
 )
-from ui.dialogs import show_dark_error, show_dark_info, show_dark_warning
+from ui.dialogs import show_dark_info
 from ui.toast import show_toast
 
 

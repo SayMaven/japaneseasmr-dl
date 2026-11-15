@@ -1,11 +1,8 @@
-import ctypes
 import io
 import os
 import re
-import subprocess
 import sys
 import threading
-import time
 import tkinter as tk
 from tkinter import ttk
 import urllib.request
@@ -16,47 +13,36 @@ from PIL import Image, ImageTk
 from config_manager import (
     extract_chapters_from_audio,
     fetch_japaneseasmr_chapters,
-    get_bin_executable,
     get_download_dir,
     get_precise_duration_seconds,
     load_history,
     write_cue_sheet,
 )
-from dlsite_scraper import resolve_best_cover_url
 from i18n import t
 from ui.constants import REFERER, USER_AGENT
-from ui.dialogs import show_dark_error, show_dark_info, show_dark_warning
+from ui.dialogs import show_dark_error
 from ui.icons import get_icon
 from ui.player_engine import (
-    NativeMFPlayer,
     format_time,
-    get_precise_duration_ms,
     mci_send,
 )
 from ui.theme import (
     ACCENT_HOVER,
     ACCENT_PRIMARY,
-    BG_VIEWPORT,
     BORDER_ACTIVE,
     BORDER_SUBTLE,
     FONT_BODY,
-    FONT_BODY_BOLD,
     FONT_CAPTION,
     FONT_CODE,
     FONT_SECTION,
-    FONT_SUBTITLE,
     RADIUS_BUTTON,
     RADIUS_CARD,
-    RADIUS_INPUT,
-    RADIUS_PILL,
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
-    SPACE_XL,
     STATUS_DANGER,
     STATUS_INFO,
     STATUS_SUCCESS,
-    STATUS_WARNING,
     SURFACE_CARD,
     SURFACE_ELEVATED,
     SURFACE_INPUT,

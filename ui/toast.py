@@ -3,17 +3,14 @@ In-App Toast Notification System for JapaneseASMR Downloader v1.2.0.
 Displays non-blocking floating card notifications in the bottom-right corner
 of the application window with a modern Tokyo Night aesthetic, auto-dismissal, and zero emojis.
 """
-import tkinter as tk
 import customtkinter as ctk
 from typing import Optional
 
 from ui.icons import get_icon
 from ui.theme import (
     BORDER_ACTIVE,
-    BORDER_SUBTLE,
     FONT_BODY_BOLD,
     FONT_CAPTION,
-    RADIUS_BUTTON,
     RADIUS_CARD,
     STATUS_DANGER,
     STATUS_INFO,

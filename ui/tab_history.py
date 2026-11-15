@@ -1,6 +1,5 @@
 import io
 import os
-import sys
 import threading
 import tkinter as tk
 from tkinter import ttk
@@ -14,34 +13,25 @@ from i18n import t
 from ui.constants import REFERER, USER_AGENT
 from ui.dialogs import (
     ask_dark_yesno,
-    show_dark_error,
     show_dark_info,
-    show_dark_warning,
 )
 from ui.icons import get_icon
 from ui.theme import (
-    ACCENT_HOVER,
-    ACCENT_PRIMARY,
-    BG_VIEWPORT,
     BORDER_ACTIVE,
     BORDER_SUBTLE,
     FONT_BODY,
     FONT_BODY_BOLD,
     FONT_CAPTION,
-    FONT_CODE,
     FONT_SECTION,
-    FONT_SUBTITLE,
     RADIUS_BUTTON,
     RADIUS_CARD,
     RADIUS_INPUT,
     SPACE_LG,
     SPACE_MD,
     SPACE_SM,
-    SPACE_XL,
     STATUS_DANGER,
     STATUS_INFO,
     STATUS_SUCCESS,
-    STATUS_WARNING,
     SURFACE_CARD,
     SURFACE_ELEVATED,
     SURFACE_INPUT,
