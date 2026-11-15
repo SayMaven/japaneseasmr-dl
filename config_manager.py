@@ -8,6 +8,8 @@ import time
 import urllib.request
 from PIL import Image
 
+from i18n import t
+
 # Register bin/ directories in PATH environment so binaries (yt-dlp, ffmpeg, aria2c) are discovered reliably
 def _setup_bin_path():
     candidate_dirs = [
@@ -1005,7 +1007,7 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
                             if log_func:
                                 omake_count = len(track_files) - 1
                                 extra_str = f" + {omake_count} omake" if omake_count > 0 else ""
-                                log_func(f"[✓] Hybrid Chapter: Track utama ({t0_dur:.1f}s) berhasil dipetakan menjadi {len(cand_tracks)} bab cerita{extra_str}!")
+                                log_func(t("log_hybrid_chapter_mapped", dur=t0_dur, count=len(cand_tracks), extra=extra_str))
 
                         # Case B: Total duration of all physical files matches asmr.one and track counts align
                         elif len(track_files) == len(cand_tracks):
@@ -1027,7 +1029,7 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
                                     curr_ms += dur_ms
                                 hybrid_matched = True
                                 if log_func:
-                                    log_func(f"[✓] Terverifikasi: {len(chapters)} track fisik disinkronkan dengan metadata asmr.one!")
+                                    log_func(t("log_asmrone_metadata_synced", count=len(chapters)))
             except Exception:
                 pass
 
@@ -1066,7 +1068,7 @@ def generate_chapter_metadata(track_files, track_names=None, rj_id=None, temp_di
 
                 hybrid_matched = True
                 if log_func:
-                    log_func(f"[✓] Tracklist JapaneseASMR: Berhasil menyinkronkan {len(chapters)} bab cerita dari situs japaneseasmr.com!")
+                    log_func(t("log_japaneseasmr_chapters_synced", count=len(chapters)))
         except Exception:
             pass
 
@@ -1274,7 +1276,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
     if meta_chapter_file:
         cleanup_list.append(meta_chapter_file)
         if log_func:
-            log_func(f"[i] Menyematkan {num_chaps} penanda bab (chapters) ke dalam {os.path.basename(output_name)}...")
+            log_func(t("log_embedding_chapters_into_file", count=num_chaps, filename=os.path.basename(output_name)))
 
     # 2. Prepare audio inputs (concat demuxer list for multi-track, or direct file)
     if len(track_files) > 1:
@@ -1361,12 +1363,12 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
     try:
         if can_fast_remux:
             if log_func:
-                log_func("[+] Mengemas audio sesuai format asli (Fast Remux instan)...")
+                log_func(t("log_audio_fast_remux"))
             try:
                 _exec_ffmpeg(remux_args)
             except subprocess.CalledProcessError as remux_err:
                 if log_func:
-                    log_func("[!] Menyesuaikan format audio...")
+                    log_func(t("log_adjusting_audio_format"))
                 try:
                     _exec_ffmpeg(reencode_args)
                 except subprocess.CalledProcessError:
@@ -1374,7 +1376,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
         else:
             if log_func:
                 target_str = "M4A" if is_m4a else "MP3"
-                log_func(f"[i] Memproses format audio ({target_str})...")
+                log_func(t("log_processing_audio_format", format=target_str))
             try:
                 _exec_ffmpeg(reencode_args)
             except subprocess.CalledProcessError:
@@ -1384,7 +1386,7 @@ def embed_cover_and_merge(track_files, cover_path, output_name, track_names=None
         if not is_m4a and parsed_chapters:
             cue_res = write_cue_sheet(output_name, parsed_chapters, meta=meta)
             if cue_res and log_func:
-                log_func(f"[✓] CUE Sheet dibuat untuk pemutar audio (Foobar2000): {os.path.basename(cue_res)}")
+                log_func(t("log_cue_sheet_created", filename=os.path.basename(cue_res)))
     except subprocess.CalledProcessError as e:
         err_msg = e.stderr.strip() if e.stderr else str(e)
         raise RuntimeError(f"FFmpeg muxing gagal: {err_msg}")

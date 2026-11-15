@@ -472,4 +472,4 @@ class HistoryTabMixin:
             if hasattr(self, "btn_open_folder_file"):
                 self.btn_open_folder_file.configure(state="disabled")
             self.btn_del_history.configure(state="disabled")
-            self._log(f"[i] Menghapus riwayat untuk: {deleted.get('rjid', '-')}")
+            self._log(t("log_history_entry_deleted", rjid=deleted.get("rjid", "-")))

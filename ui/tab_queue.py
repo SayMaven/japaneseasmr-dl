@@ -468,7 +468,7 @@ class QueueTabMixin:
             item = {
                 "no": row_id,
                 "rjid": rjid,
-                "title": "Memuat info...",
+                "title": t("status_fetching_meta"),
                 "status": "Pending",
                 "cover_url": "",
                 "cover_image": None,
@@ -478,16 +478,16 @@ class QueueTabMixin:
                 "genre": "-",
             }
             self.queue_items.append(item)
-            self.tree.insert("", "end", iid=str(row_id - 1), values=(row_id, rjid, "Memuat info...", "Pending"))
+            self.tree.insert("", "end", iid=str(row_id - 1), values=(row_id, rjid, t("status_fetching_meta"), t("status_ready")))
             added_count += 1
 
             threading.Thread(target=self._fetch_metadata_for_item, args=(row_id - 1, rjid), daemon=True).start()
 
         if added_count > 0:
             self.id_entry.delete(0, "end")
-            self._log(f"[+] Menambahkan {added_count} item ke antrean.")
+            self._log(t("log_added_items_to_queue", count=added_count))
         else:
-            show_dark_warning(self, "Peringatan", "Tidak ada kode RJ baru yang valid atau item sudah ada di antrean.")
+            show_dark_warning(self, t("msg_info_title"), t("msg_queue_empty"))
 
     def _fetch_metadata_for_item(self, row_idx, rjid):
         def _update_ui(meta, pil_img):
@@ -597,8 +597,8 @@ class QueueTabMixin:
         self.lbl_q_circle.configure(text="-")
         self.lbl_q_rating.configure(text="-", text_color=TEXT_PRIMARY)
         self.lbl_q_genre.configure(text="-")
-        self._update_progress(0, "Antrean dibersihkan")
-        self._log("[i] Antrean dibersihkan.")
+        self._update_progress(0, t("log_queue_cleared"))
+        self._log(t("log_queue_cleared"))
 
     def _paste_from_clipboard(self):
         try:
@@ -621,4 +621,4 @@ class QueueTabMixin:
                 self.id_entry.delete(0, "end")
                 self.id_entry.insert(0, clip_text.strip())
         except Exception as e:
-            self._log(f"[!] Gagal membaca clipboard: {e}")
+            self._log(t("log_clipboard_read_failed", error=str(e)))

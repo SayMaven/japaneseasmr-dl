@@ -68,7 +68,7 @@ class DownloadWorkerMixin:
         if self.is_downloading:
             return
         if not self.queue_items:
-            show_dark_info(self, "Informasi", "Silakan tambahkan kode RJ ke antrean terlebih dahulu.")
+            show_dark_info(self, t("msg_info_title"), t("msg_queue_empty"))
             return
 
         self.is_downloading = True
@@ -82,7 +82,7 @@ class DownloadWorkerMixin:
 
     def _stop_downloads(self):
         self.stop_requested = True
-        self._log("[!] Menghentikan proses download seketika...")
+        self._log(t("log_stopping_download"))
         if hasattr(self, "stop_btn") and self.stop_btn.winfo_exists():
             self.stop_btn.configure(state="disabled")
 
@@ -124,13 +124,13 @@ class DownloadWorkerMixin:
                 except OSError:
                     pass
 
-        self._update_progress(0, "Download Dihentikan")
+        self._update_progress(0, t("status_download_stopped"))
 
     def _download_worker(self):
         download_dir = get_download_dir()
         os.makedirs(download_dir, exist_ok=True)
         total_items = len(self.queue_items)
-        self._update_progress(0, f"Mempersiapkan {total_items} item...")
+        self._update_progress(0, t("status_preparing_items", total=total_items))
 
         for idx, item in enumerate(self.queue_items):
             if self.stop_requested:
@@ -140,7 +140,7 @@ class DownloadWorkerMixin:
             base_pct = idx * item_step
 
             if item["status"] == "Selesai":
-                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Dilewati)")
+                self._update_progress((idx + 1) * item_step, t("status_skipped_done", current=idx+1, total=total_items))
                 continue
 
             rjid = item["rjid"]
@@ -163,15 +163,15 @@ class DownloadWorkerMixin:
 
             existing_file = next((f for f in possible_existing if os.path.exists(f) and os.path.getsize(f) > 0), None)
             if existing_file:
-                self._log(f"[SKIP] File '{os.path.basename(existing_file)}' sudah ada.")
+                self._log(t("log_file_already_exists", filename=os.path.basename(existing_file)))
                 item["status"] = "Selesai"
-                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai (Ada)"))
-                self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Sudah Ada)")
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", t("status_completed")))
+                self._update_progress((idx + 1) * item_step, t("status_skipped_existing", current=idx+1, total=total_items))
                 continue
 
             # Mark current item as active download
             item["status"] = "Downloading"
-            self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Mengunduh..."))
+            self.after(0, lambda i=idx: self.tree.set(str(i), "status", t("status_downloading")))
             self.after(0, lambda i=idx: self.tree.selection_set(str(i)))
 
             cover_url = item.get("cover_url")
@@ -186,30 +186,30 @@ class DownloadWorkerMixin:
             temp_files = [temp_cover]
 
             try:
-                self._log(f"\n--- [{idx+1}/{total_items}] Memproses {rjid} ---")
+                self._log(t("log_processing_item", current=idx+1, total=total_items, rjid=rjid))
 
                 # 0. Discover all audio tracks (including multi-track, omake, or asmr.one fallback)
-                self._update_progress(base_pct + item_step * 0.05, f"[{idx+1}/{total_items}] Memindai track audio...")
-                self._log("[0/3] Mendeteksi jumlah track audio...")
+                self._update_progress(base_pct + item_step * 0.05, t("status_scanning_tracks", current=idx+1, total=total_items))
+                self._log(t("log_detecting_tracks"))
                 tracks = discover_all_audio_tracks(rjid, REFERER, USER_AGENT)
                 track_names = [t["name"] for t in tracks]
                 source_type = tracks[0].get("source", "japaneseasmr") if tracks else "japaneseasmr"
                 if source_type == "asmr.one":
-                    self._log(f"[i] Sumber audio: asmrone (Fallback aktif)")
+                    self._log(t("log_audio_source_asmrone"))
                 else:
-                    self._log(f"[i] Sumber audio: JapaneseASMR (Utama)")
+                    self._log(t("log_audio_source_primary"))
 
                 if len(tracks) > 1:
-                    self._log(f"[i] Terdeteksi {len(tracks)} track ({', '.join(track_names)}). Semua akan digabung otomatis!")
+                    self._log(t("log_tracks_detected_multiple", count=len(tracks), names=', '.join(track_names)))
                 else:
-                    self._log(f"[i] Terdeteksi 1 track audio.")
+                    self._log(t("log_tracks_detected_single"))
 
                 if self.stop_requested:
                     break
 
                 # 1. Download and standardize cover image as JPEG for shell preview compatibility
-                self._update_progress(base_pct + item_step * 0.15, f"[{idx+1}/{total_items}] Mengunduh cover art...")
-                self._log("[1/3] Mengunduh cover art...")
+                self._update_progress(base_pct + item_step * 0.15, t("status_downloading_cover", current=idx+1, total=total_items))
+                self._log(t("log_downloading_cover"))
 
                 cache_cover_file = os.path.join(".cache", "covers", f"{rjid}.jpg")
                 cover_downloaded = False
@@ -258,7 +258,7 @@ class DownloadWorkerMixin:
                             continue
 
                 if not cover_downloaded:
-                    self._log("[!] Cover art online tidak ditemukan, menggunakan cover placeholder default.")
+                    self._log(t("log_cover_not_found_placeholder"))
                     blank_img = Image.new("RGB", (600, 600), color=(30, 30, 46))
                     blank_img.save(temp_cover, "JPEG", quality=90)
 
@@ -290,12 +290,12 @@ class DownloadWorkerMixin:
 
                     self._update_progress(
                         base_pct + item_step * t_start_ratio,
-                        f"[{idx+1}/{total_items}] Menghubungkan {t_name} [{t_idx}/{len(tracks)}]...",
-                        speed="Menghubungkan...",
-                        eta="Menghitung...",
-                        size_str="Ukuran: Memuat...",
+                        t("status_connecting_track", current=idx+1, total=total_items, name=t_name, t_idx=t_idx, total_tracks=len(tracks)),
+                        speed=t("status_connecting"),
+                        eta=t("status_calculating"),
+                        size_str=t("status_size_label", size=t("status_loading")),
                     )
-                    self._log(f"[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}]...")
+                    self._log(t("log_downloading_track", name=t_name, current=t_idx, total=len(tracks)))
 
                     conn_int = int(self.config.get("connections", 16))
                     conn_val = str(conn_int)
@@ -312,7 +312,7 @@ class DownloadWorkerMixin:
                             break
 
                         if attempt_idx > 1:
-                            self._log(f"  [i] Mengulang pengunduhan {t_name} (Percobaan {attempt_idx}/{max_track_attempts})...")
+                            self._log(t("log_retry_download_track", name=t_name, attempt=attempt_idx, max_attempts=max_track_attempts))
                             time.sleep(2)
 
                         cmd_ytdlp = [
@@ -381,10 +381,10 @@ class DownloadWorkerMixin:
                                     frag_info = f" (Frag {frag_cur}/{frag_tot})" if frag_cur and frag_tot else ""
                                     self._update_progress(
                                         cur_overall,
-                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]{frag_info}",
-                                        speed=f"Kecepatan: {sp}",
-                                        eta=f"Sisa Waktu: {et}",
-                                        size_str=f"Total: ~{total_sz}",
+                                        status_text=t("status_downloading_track_item", current=idx+1, total=total_items, name=t_name, t_idx=t_idx, total_tracks=len(tracks), frag_info=frag_info),
+                                        speed=t("status_speed_label", speed=sp),
+                                        eta=t("status_eta_label", eta=et),
+                                        size_str=t("status_size_label", size=f"~{total_sz}"),
                                     )
                                     continue
 
@@ -400,10 +400,10 @@ class DownloadWorkerMixin:
                                     cur_overall = base_pct + item_step * track_part
                                     self._update_progress(
                                         cur_overall,
-                                        status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} [{t_idx}/{len(tracks)}]",
-                                        speed=f"Kecepatan: {sp}",
-                                        eta=f"Sisa Waktu: {et}",
-                                        size_str=f"Ukuran: {cur_sz} / {tot_sz}",
+                                        status_text=t("status_downloading_track_item", current=idx+1, total=total_items, name=t_name, t_idx=t_idx, total_tracks=len(tracks), frag_info=""),
+                                        speed=t("status_speed_label", speed=sp),
+                                        eta=t("status_eta_label", eta=et),
+                                        size_str=t("status_size_label", size=f"{cur_sz} / {tot_sz}"),
                                     )
                                     continue
 
@@ -418,10 +418,10 @@ class DownloadWorkerMixin:
                                         cur_overall = base_pct + item_step * track_part
                                         self._update_progress(
                                             cur_overall,
-                                            status_text=f"[{idx+1}/{total_items}] Mengunduh {t_name} (Frag {cur_f}/{tot_f})",
+                                            status_text=t("status_downloading_track_item", current=idx+1, total=total_items, name=t_name, t_idx=t_idx, total_tracks=len(tracks), frag_info=f" (Frag {cur_f}/{tot_f})"),
                                             speed=None,
                                             eta=None,
-                                            size_str=f"Segmen: {cur_f}/{tot_f}",
+                                            size_str=t("status_segment_label", cur=cur_f, total=tot_f),
                                         )
                                         continue
 
@@ -463,11 +463,11 @@ class DownloadWorkerMixin:
                 final_output = os.path.join(download_dir, f"{base_fname}{out_ext}")
 
                 # 4. Embed cover art, metadata tags, and chapter markers into audio container
-                self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata...")
+                self._update_progress(base_pct + item_step * 0.90, t("status_embedding_metadata", current=idx+1, total=total_items))
                 if len(downloaded_track_files) > 1:
-                    self._log(f"[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...")
+                    self._log(t("log_merging_tracks_chapters", count=len(downloaded_track_files)))
                 else:
-                    self._log(f"[3/3] Menyematkan cover art, penanda bab & metadata...")
+                    self._log(t("log_embedding_cover_chapters"))
 
                 embed_cover_and_merge(
                     track_files=downloaded_track_files,
@@ -503,16 +503,16 @@ class DownloadWorkerMixin:
                 )
 
                 item["status"] = "Selesai"
-                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Selesai"))
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", t("status_completed")))
                 self.after(0, self._load_history_view)
                 self._update_progress(
                     (idx + 1) * item_step,
-                    f"[{idx+1}/{total_items}] Selesai {rjid}",
-                    speed="Kecepatan: -",
-                    eta="Sisa Waktu: -",
-                    size_str="Status: Selesai",
+                    t("status_completed_item", current=idx+1, total=total_items, rjid=rjid),
+                    speed=t("status_speed_label", speed="-"),
+                    eta=t("status_eta_label", eta="-"),
+                    size_str=t("status_size_label", size=t("status_completed")),
                 )
-                self._log(f"[OK] SUKSES: Tersimpan di {os.path.basename(final_output)}")
+                self._log(t("log_success_saved", filename=os.path.basename(final_output)))
                 norm_out = os.path.normcase(os.path.abspath(final_output))
                 self._chapters_cache.pop(norm_out, None)
                 self.after(0, self._refresh_playlist_view)
@@ -521,8 +521,8 @@ class DownloadWorkerMixin:
                 if self.stop_requested:
                     break
                 item["status"] = "Error"
-                self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Error"))
-                self._log(f"[X] Gagal memproses {rjid}: {e}")
+                self.after(0, lambda i=idx: self.tree.set(str(i), "status", t("status_error")))
+                self._log(t("log_failed_processing", rjid=rjid, error=str(e)))
 
             finally:
                 for tf in temp_files:
@@ -550,28 +550,28 @@ class DownloadWorkerMixin:
             pass
 
         if self.stop_requested:
-            self._log("[!] Semua proses download telah dihentikan.")
+            self._log(t("log_all_downloads_stopped"))
             self._update_progress(
                 0,
-                "Download Dihentikan",
-                speed="Kecepatan: -",
-                eta="Sisa Waktu: -",
-                size_str="Ukuran: - / -",
+                t("status_download_stopped"),
+                speed=t("status_speed_label", speed="-"),
+                eta=t("status_eta_label", eta="-"),
+                size_str=t("status_size_label", size="- / -"),
             )
             # Revert items interrupted in downloading state back to Pending
             for idx, item in enumerate(self.queue_items):
                 if item["status"] == "Downloading":
                     item["status"] = "Pending"
-                    self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Pending"))
+                    self.after(0, lambda i=idx: self.tree.set(str(i), "status", t("status_ready")))
         else:
             self._update_progress(
                 100,
-                "Semua proses selesai (100%)",
-                speed="Kecepatan: -",
-                eta="Sisa Waktu: -",
-                size_str="Ukuran: Selesai",
+                t("status_all_finished_pct"),
+                speed=t("status_speed_label", speed="-"),
+                eta=t("status_eta_label", eta="-"),
+                size_str=t("status_size_label", size=t("status_completed")),
             )
-            self._log("\n--- Semua proses download dalam antrean selesai ---")
+            self._log(t("log_all_downloads_completed"))
             if self.cfg.get("notify_popup", True):
                 self.after(
                     0,
