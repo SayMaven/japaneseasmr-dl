@@ -1,7 +1,7 @@
 """
-In-App Toast Notification System untuk JapaneseASMR Downloader v1.2.0.
-Menampilkan notifikasi mengambang (floating card) non-blocking di pojok kanan bawah
-jendela aplikasi dengan desain Tokyo Night modern, auto-dismiss, dan zero emoji.
+In-App Toast Notification System for JapaneseASMR Downloader v1.2.0.
+Displays non-blocking floating card notifications in the bottom-right corner
+of the application window with a modern Tokyo Night aesthetic, auto-dismissal, and zero emojis.
 """
 import tkinter as tk
 import customtkinter as ctk
@@ -29,8 +29,8 @@ from ui.theme import (
 
 class ToastNotification(ctk.CTkFrame):
     """
-    Komponen Toast Notification non-blocking.
-    Mengambang di sudut kanan bawah jendela utama tanpa mencuri fokus atau memblokir klik.
+    Non-blocking toast notification widget.
+    Floats in the bottom-right corner of the parent window without stealing focus.
     """
     def __init__(
         self,
@@ -40,7 +40,7 @@ class ToastNotification(ctk.CTkFrame):
         toast_type: str = "success",
         duration_ms: int = 4000,
     ):
-        # Jika ada toast lama yang masih tampil di window, bersihkan terlebih dahulu
+        # Dismiss any existing active toast before creating a new one
         old_toast = getattr(parent, "_active_toast", None)
         if old_toast and old_toast.winfo_exists():
             try:
@@ -78,11 +78,11 @@ class ToastNotification(ctk.CTkFrame):
         }
         cfg = type_configs.get(toast_type, type_configs["success"])
 
-        # Inner container dengan padding
+        # Inner container with standard padding
         inner = ctk.CTkFrame(self, fg_color="transparent")
         inner.pack(padx=14, pady=12, fill="both", expand=True)
 
-        # 1. Indikator Icon di sebelah kiri
+        # 1. Left status indicator badge
         icon_badge = ctk.CTkLabel(
             inner,
             text="",
@@ -94,7 +94,7 @@ class ToastNotification(ctk.CTkFrame):
         )
         icon_badge.pack(side="left", padx=(0, 12), anchor="center")
 
-        # 2. Text Container (Judul & Pesan)
+        # 2. Text container (Title and Description)
         text_frame = ctk.CTkFrame(inner, fg_color="transparent")
         text_frame.pack(side="left", fill="both", expand=True, padx=(0, 8))
 
@@ -118,7 +118,7 @@ class ToastNotification(ctk.CTkFrame):
         )
         lbl_msg.pack(fill="x", anchor="w", pady=(2, 0))
 
-        # 3. Tombol Tutup (✕) Minimalis
+        # 3. Dismiss button
         btn_close = ctk.CTkButton(
             inner,
             text="✕",
@@ -133,17 +133,17 @@ class ToastNotification(ctk.CTkFrame):
         )
         btn_close.pack(side="right", anchor="n", padx=(4, 0))
 
-        # Tampilkan toast di pojok kanan bawah
+        # Position toast in bottom-right corner
         self.place(relx=0.98, rely=0.96, anchor="se")
         self.lift()
 
-        # Timer auto-dismiss
+        # Scheduled auto-dismiss timer
         self._dismiss_job = None
         if duration_ms > 0:
             self._dismiss_job = self.after(duration_ms, self.dismiss)
 
     def dismiss(self):
-        """Menutup dan menghancurkan widget toast secara aman."""
+        """Safely dismiss and destroy the toast notification widget."""
         if self._dismiss_job is not None:
             try:
                 self.after_cancel(self._dismiss_job)
@@ -169,8 +169,8 @@ def show_toast(
     duration_ms: int = 4000,
 ) -> Optional[ToastNotification]:
     """
-    Fungsi helper utama untuk menampilkan toast notification di jendela parent.
-    Aman dipanggil langsung dari thread utama Tkinter.
+    Display a toast notification in the bottom-right corner of the parent window.
+    Safe to call directly from the main Tkinter thread.
     """
     if not parent or not parent.winfo_exists():
         return None
@@ -183,6 +183,6 @@ def show_toast(
             duration_ms=duration_ms,
         )
     except Exception as e:
-        print(f"[ui.toast] Gagal menampilkan toast notification: {e}")
+        print(f"[ui.toast] Failed to display toast notification: {e}")
         return None
 

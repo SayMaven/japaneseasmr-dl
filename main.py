@@ -1,7 +1,7 @@
 import os
 import sys
 
-# Panggil Explicit AppUserModelID di baris PALING AWAL sebelum modul UI diinisialisasi
+# Set Explicit AppUserModelID as early as possible before any UI modules initialize
 if sys.platform == "win32":
     try:
         import ctypes
@@ -13,7 +13,7 @@ from ui import JapaneseASMRApp
 
 
 def main():
-    """Entry point utama aplikasi (Desktop GUI)."""
+    """Main application entry point for the desktop GUI."""
     app = JapaneseASMRApp()
     app.mainloop()
 

@@ -37,7 +37,7 @@ from ui.toast import show_toast
 
 
 class DownloadWorkerMixin:
-    """Mixin untuk mengelola proses download latar belakang, status progress, dan penghentian tugas."""
+    """Mixin providing background download processing, real-time progress tracking, and graceful task cancellation."""
     def _update_progress(self, val_pct, status_text=None, speed=None, eta=None, size_str=None):
         def _apply():
             try:
@@ -88,7 +88,7 @@ class DownloadWorkerMixin:
         if hasattr(self, "stop_btn") and self.stop_btn.winfo_exists():
             self.stop_btn.configure(state="disabled")
 
-        # 1. Kill subprocess aktif secara paksa beserta anak-anaknya (yt-dlp, aria2c, ffmpeg)
+        # 1. Terminate active subprocess and child processes (yt-dlp, aria2c, ffmpeg)
         if self.current_process and self.current_process.poll() is None:
             try:
                 if sys.platform == "win32":
@@ -103,7 +103,7 @@ class DownloadWorkerMixin:
                 pass
             self.current_process = None
 
-        # 2. Pastikan process aria2c / yt-dlp / ffmpeg yatim dimatikan
+        # 2. Clean up any orphaned download or transcoding processes
         if sys.platform == "win32":
             for p_name in ["aria2c.exe", "yt-dlp.exe", "ffmpeg.exe"]:
                 try:
@@ -115,7 +115,7 @@ class DownloadWorkerMixin:
                 except Exception:
                     pass
 
-        # 3. Bersihkan sampah part & temp files di .cache/temp/
+        # 3. Clean up residual temporary files in .cache/temp/
         temp_dir = os.path.join(".cache", "temp")
         if os.path.exists(temp_dir):
             for fname in os.listdir(temp_dir):
@@ -148,7 +148,7 @@ class DownloadWorkerMixin:
             rjid = item["rjid"]
             title = item.get("title", "")
 
-            # Nama File Output & Cek apakah sudah pernah diunduh
+            # Resolve destination filename and check for existing files
             configured_fmt = get_audio_format()
             clean_title = sanitize_filename(title) if (self.opt_detailed_name.get() and title and title != "Memuat info..." and title != rjid) else ""
             base_fname = f"[{rjid}] {clean_title}" if clean_title else rjid
@@ -171,7 +171,7 @@ class DownloadWorkerMixin:
                 self._update_progress((idx + 1) * item_step, f"[{idx+1}/{total_items}] Selesai (Sudah Ada)")
                 continue
 
-            # Update status ke downloading
+            # Mark current item as active download
             item["status"] = "Downloading"
             self.after(0, lambda i=idx: self.tree.set(str(i), "status", "Mengunduh..."))
             self.after(0, lambda i=idx: self.tree.selection_set(str(i)))
@@ -190,7 +190,7 @@ class DownloadWorkerMixin:
             try:
                 self._log(f"\n--- [{idx+1}/{total_items}] Memproses {rjid} ---")
 
-                # 0. Deteksi Semua Track (Multi-track & Omake / asmr.one fallback)
+                # 0. Discover all audio tracks (including multi-track, omake, or asmr.one fallback)
                 self._update_progress(base_pct + item_step * 0.05, f"[{idx+1}/{total_items}] Memindai track audio...")
                 self._log("[0/3] Mendeteksi jumlah track audio...")
                 tracks = discover_all_audio_tracks(rjid, REFERER, USER_AGENT)
@@ -209,7 +209,7 @@ class DownloadWorkerMixin:
                 if self.stop_requested:
                     break
 
-                # 1. Download & Standardize Cover to JPEG (agar terbaca Windows Explorer)
+                # 1. Download and standardize cover image as JPEG for shell preview compatibility
                 self._update_progress(base_pct + item_step * 0.15, f"[{idx+1}/{total_items}] Mengunduh cover art...")
                 self._log("[1/3] Mengunduh cover art...")
 
@@ -267,7 +267,7 @@ class DownloadWorkerMixin:
                 if self.stop_requested:
                     break
 
-                # 2. Download Semua Track Audio
+                # 2. Download audio tracks sequentially
                 downloaded_track_files = []
                 for t_idx, track_info in enumerate(tracks, start=1):
                     if self.stop_requested:
@@ -360,7 +360,7 @@ class DownloadWorkerMixin:
                             creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0,
                         )
 
-                        # Baca stream output secara real-time untuk update indikator kecepatan, ETA, dan ukuran
+                        # Stream process output in real-time to extract progress, speed, ETA, and size metrics
                         if self.current_process.stdout:
                             for raw_line in iter(self.current_process.stdout.readline, ""):
                                 if self.stop_requested:
@@ -369,7 +369,7 @@ class DownloadWorkerMixin:
                                 if not line_s:
                                     continue
 
-                                # 1. Parse format standar yt-dlp
+                                # 1. Parse standard yt-dlp progress output
                                 m_yt = RE_YTDLP_PROGRESS.search(line_s)
                                 if m_yt:
                                     pct_val = float(m_yt.group(1))
@@ -390,7 +390,7 @@ class DownloadWorkerMixin:
                                     )
                                     continue
 
-                                # 2. Parse format summary aria2c
+                                # 2. Parse aria2c summary progress output
                                 m_ar = RE_ARIA2_PROGRESS.search(line_s)
                                 if m_ar:
                                     cur_sz = m_ar.group(1)
@@ -409,7 +409,7 @@ class DownloadWorkerMixin:
                                     )
                                     continue
 
-                                # 3. Parse format fragment HLS
+                                # 3. Parse HLS fragment progress output
                                 m_fr = RE_FRAG_PROGRESS.search(line_s)
                                 if m_fr:
                                     cur_f = int(m_fr.group(1))
@@ -427,7 +427,7 @@ class DownloadWorkerMixin:
                                         )
                                         continue
 
-                                # Filter log agar log konsol bersih dari noise [generic], [download], [#a1b2c3], [info], [hlsnative], aria2 summary
+                                # Filter noisy CLI lines from log console to keep output readable
                                 if line_s.startswith("ERROR:") or line_s.startswith("WARNING:"):
                                     self._log(f"  [!] {line_s}")
                                 elif not any(line_s.startswith(pfx) for pfx in ["[download]", "[#", "[generic]", "[info]", "[hlsnative]", "[ExtractAudio]", "[Merger]", "Deleting original file", "***", "===", "---", "FILE:", "Download Results:", "Status Legend:"]):
@@ -435,7 +435,7 @@ class DownloadWorkerMixin:
 
                         self.current_process.wait()
 
-                        # Deteksi file audio yang berhasil dibuat (berbagai format audio asli)
+                        # Identify the downloaded audio candidate in the temporary directory
                         prefix = f"temp_{rjid}_t{t_idx}."
                         candidates = [
                             os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
@@ -456,7 +456,7 @@ class DownloadWorkerMixin:
                 if self.stop_requested:
                     break
 
-                # 3. Tentukan nama dan format file output akhir (Smart Native Container)
+                # 3. Determine final container format and file path (Smart Native Container)
                 if configured_fmt == "auto":
                     first_codec = get_audio_codec(downloaded_track_files[0]) if downloaded_track_files else ""
                     out_ext = ".m4a" if first_codec == "aac" else (".mp3" if first_codec == "mp3" else ".m4a")
@@ -464,7 +464,7 @@ class DownloadWorkerMixin:
                     out_ext = f".{configured_fmt}"
                 final_output = os.path.join(download_dir, f"{base_fname}{out_ext}")
 
-                # 3. Embed Cover Art, Metadata & Chapters ke format audio
+                # 4. Embed cover art, metadata tags, and chapter markers into audio container
                 self._update_progress(base_pct + item_step * 0.90, f"[{idx+1}/{total_items}] Menyematkan cover & metadata...")
                 if len(downloaded_track_files) > 1:
                     self._log(f"[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...")
@@ -484,14 +484,14 @@ class DownloadWorkerMixin:
                 if self.stop_requested:
                     break
 
-                # Validasi ketat file output
+                # Verify that the output file exists and is non-empty
                 if not os.path.exists(final_output) or os.path.getsize(final_output) == 0:
                     raise RuntimeError(f"Gagal memproses file audio final: {os.path.basename(final_output)}")
 
                 if self.stop_requested:
                     break
 
-                # Simpan ke riwayat unduhan & cache cover art
+                # Persist download metadata to history store and cover cache
                 add_to_history(
                     rjid=rjid,
                     title=title,
@@ -560,7 +560,7 @@ class DownloadWorkerMixin:
                 eta="Sisa Waktu: -",
                 size_str="Ukuran: - / -",
             )
-            # Kembalikan item yang statusnya masih Downloading ke Pending
+            # Revert items interrupted in downloading state back to Pending
             for idx, item in enumerate(self.queue_items):
                 if item["status"] == "Downloading":
                     item["status"] = "Pending"

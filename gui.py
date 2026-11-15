@@ -1,15 +1,15 @@
 """
-GUI Module untuk JapaneseASMR Downloader.
-Modul-modul antarmuka telah dipecah ke dalam package `ui/` agar lebih terorganisir dan mudah dirawat:
-- `ui.app`: JapaneseASMRApp (Window utama & lifecycle)
-- `ui.dialogs`: InAppModal & dark alert dialogs
-- `ui.downloader`: DownloadWorkerMixin (worker thread & subprocess yt-dlp/aria2c)
+GUI package compatibility entry point for JapaneseASMR Downloader.
+Interface modules are organized within the `ui/` package:
+- `ui.app`: JapaneseASMRApp (Main window and application lifecycle)
+- `ui.dialogs`: InAppModal and dark-themed alert dialogs
+- `ui.downloader`: DownloadWorkerMixin (worker thread and yt-dlp/aria2c subprocesses)
 - `ui.player_engine`: NativeMFPlayer (Windows Media Foundation native audio engine)
-- `ui.settings_dialog`: SettingsDialog (dialog pengaturan lengkap)
-- `ui.tab_queue`: QueueTabMixin (antarmuka tab antrean & metadata)
-- `ui.tab_history`: HistoryTabMixin (antarmuka tab riwayat)
-- `ui.tab_player`: PlayerTabMixin (antarmuka tab pemutar & chapters)
-- `ui.constants`: Referer, User-Agent, Regex progress
+- `ui.settings_dialog`: SettingsDialog (integrated settings tab shim)
+- `ui.tab_queue`: QueueTabMixin (download queue and metadata preview interface)
+- `ui.tab_history`: HistoryTabMixin (download history interface)
+- `ui.tab_player`: PlayerTabMixin (integrated audio player and chapters interface)
+- `ui.constants`: HTTP headers and regex patterns
 """
 from ui import (
     JapaneseASMRApp,

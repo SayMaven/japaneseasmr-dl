@@ -31,7 +31,7 @@ GUID_NULL = GUID(0, 0, 0, (ctypes.c_byte * 8)())
 
 
 class NativeMFPlayer:
-    """Pemutar audio berbasis Windows Media Foundation (MFPlay) untuk pemutaran native M4A, AAC, MP3, WAV."""
+    """Windows Media Foundation (MFPlay) audio engine for native playback of M4A, AAC, MP3, and WAV."""
     def __init__(self):
         self.player_ptr = ctypes.c_void_p()
         self.is_playing = False
@@ -74,7 +74,7 @@ class NativeMFPlayer:
             self.RelFunc = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(vtable[2])
             self.seek_offset_sec = 0.0
 
-            # Pastikan kecepatan putar selalu normal 1.0x (bukan melambat akibat bug SetRate)
+            # Enforce normal 1.0x playback rate
             try:
                 self.SetRateFunc(self.player_ptr, ctypes.c_float(1.0))
             except Exception:
@@ -177,8 +177,8 @@ class NativeMFPlayer:
 
 def get_precise_duration_ms(file_path):
     """
-    Mendapatkan durasi presisi berkas audio (dalam milidetik) via FFmpeg
-    untuk mencegah distorsi panjang durasi akibat bug VBR Windows MCI.
+    Retrieve precise audio duration (in milliseconds) via FFmpeg
+    to prevent duration distortion caused by Windows MCI VBR bugs.
     """
     try:
         ffmpeg_bin = get_bin_executable("ffmpeg")

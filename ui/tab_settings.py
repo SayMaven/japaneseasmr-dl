@@ -1,8 +1,7 @@
 """
-Modul Tab Pengaturan Terintegrasi (SettingsTabMixin) untuk JapaneseASMR Downloader.
-Menggantikan dialog popup terpisah dengan tampilan tab bawaan di dalam aplikasi
-berdasarkan Tokyo Night Design System, tanpa emoji, tipografi modern v1.2.0,
-serta performa tinggi bebas lag (zero-lag subtab switching & background async worker).
+Integrated Settings Tab module (SettingsTabMixin) for JapaneseASMR Downloader.
+Provides an integrated settings viewport based on the Tokyo Night design system,
+with modern typography, clean aesthetics, zero-lag subtab switching, and asynchronous workers.
 """
 import os
 import threading
@@ -62,7 +61,7 @@ from ui.theme import (
 
 
 class SettingsTabMixin:
-    """Mixin untuk menyediakan tampilan dan manajemen Tab Pengaturan di Viewport Utama."""
+    """Mixin providing layout, state, and management for the Settings Tab in the primary viewport."""
 
     def _init_settings_variables(self):
         self.cfg = load_config()
@@ -113,13 +112,13 @@ class SettingsTabMixin:
         self._is_checking_cache = False
 
     def _build_settings_tab(self):
-        """Membangun layout lengkap Tab Pengaturan di self.tab_settings dengan subtabs persisten bebas lag."""
+        """Construct the settings tab layout within self.tab_settings with persistent subtab frames."""
         self._init_settings_variables()
 
-        # Frame Kontainer Utama Tab Pengaturan
+        # Primary settings container
         self.tab_settings.configure(fg_color=BG_VIEWPORT)
 
-        # 1. Header Bar Tab Pengaturan
+        # 1. Settings Header Bar
         header_frame = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
         header_frame.pack(fill="x", padx=SPACE_XL, pady=(SPACE_LG, SPACE_SM))
 
@@ -141,7 +140,7 @@ class SettingsTabMixin:
         )
         self.lbl_settings_header_desc.pack(anchor="w", pady=(2, 0))
 
-        # 2. Sub-tab Selector Bar (Horizontal Segmented Bar)
+        # 2. Horizontal Subtab Segmented Bar
         nav_bar = ctk.CTkFrame(
             self.tab_settings,
             fg_color=SURFACE_CARD,
@@ -227,7 +226,7 @@ class SettingsTabMixin:
         )
         self.btn_settings_reset.pack(side="right", padx=(0, SPACE_SM), pady=10)
 
-        # 4. Viewport Konten Subtab dengan Grid Stacking (Instant 60fps Switch with .lift())
+        # 4. Subtab content viewport using grid stacking (instant switch with grid_remove())
         self.subtabs_viewport = ctk.CTkFrame(self.tab_settings, fg_color="transparent")
         self.subtabs_viewport.pack(fill="both", expand=True, padx=SPACE_XL, pady=(0, SPACE_SM))
         self.subtabs_viewport.grid_rowconfigure(0, weight=1)
@@ -261,31 +260,31 @@ class SettingsTabMixin:
         self._refresh_cache_stats()
 
     def _switch_settings_subtab(self, subtab_name: str):
-        """Beralih subtab seketika via unmapping frame tersembunyi (grid_remove())."""
+        """Switch active subtab instantaneously by unmapping inactive frames via grid_remove()."""
         prev = getattr(self, "_prev_settings_subtab", None)
         self.current_settings_subtab = subtab_name
         self._prev_settings_subtab = subtab_name
 
-        # Update button visual state hanya untuk tombol yang berubah
+        # Update button visual state only for affected tabs
         if prev and prev in self.settings_subtab_btns and prev != subtab_name:
             self.settings_subtab_btns[prev].configure(fg_color="transparent", text_color=TEXT_SECONDARY)
         if subtab_name in self.settings_subtab_btns:
             self.settings_subtab_btns[subtab_name].configure(fg_color=ACCENT_PRIMARY, text_color="#ffffff")
 
-        # Tampilkan frame aktif dan sembunyikan frame lainnya dengan grid_remove()
+        # Map active subtab frame and unmap others
         for sid, frame in self.subtab_frames.items():
             if sid == subtab_name:
                 frame.grid(row=0, column=0, sticky="nsew")
             else:
                 frame.grid_remove()
 
-        # Update cache stats jika membuka tab cache
+        # Refresh cache stats when switching to cache subtab
         if subtab_name == "cache":
             self._refresh_cache_stats()
 
-    # ==================== SUBTAB 1: UMUM ====================
+    # ==================== SUBTAB 1: GENERAL ====================
     def _build_subtab_general(self, parent):
-        # Card 1: Bahasa
+        # Card 1: Language
         card_lang = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -328,7 +327,7 @@ class SettingsTabMixin:
         self.cbo_lang.set(cur_disp)
         self.cbo_lang.pack(anchor="w")
 
-        # Card 2: Folder Penyimpanan
+        # Card 2: Storage Directory
         card_dir = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -376,7 +375,7 @@ class SettingsTabMixin:
         )
         self.btn_set_browse.pack(side="right")
 
-        # Card 3: Otomatisasi & Notifikasi
+        # Card 3: Automation & Notification Switches
         card_opts = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -470,7 +469,7 @@ class SettingsTabMixin:
 
     # ==================== SUBTAB 2: DOWNLOAD & ENGINE ====================
     def _build_subtab_download(self, parent):
-        # Card 1: Format Audio
+        # Card 1: Audio Format
         card_fmt = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -517,7 +516,7 @@ class SettingsTabMixin:
         self.cbo_fmt.set(self._fmt_disp_map.get(cur_fmt, fmt_options[0][1]))
         self.cbo_fmt.pack(anchor="w")
 
-        # Card 2: Aria2c Multi-connection
+        # Card 2: Aria2c Multi-connection Options
         card_conn = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -603,7 +602,7 @@ class SettingsTabMixin:
         self.lbl_ytdlp_status_tab.pack(side="left")
 
     def _refresh_ytdlp_version_async(self, force=False):
-        """Memeriksa versi yt-dlp di latar belakang secara thread-safe."""
+        """Asynchronously query the yt-dlp binary version in a background worker."""
         if self._cached_ytdlp_ver and not force:
             if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
                 self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=self._cached_ytdlp_ver))
@@ -619,7 +618,7 @@ class SettingsTabMixin:
                 ver = get_ytdlp_version()
                 self._cached_ytdlp_ver = ver
             except Exception:
-                self._cached_ytdlp_ver = "Tidak diketahui"
+                self._cached_ytdlp_ver = "Unknown"
             finally:
                 self._is_checking_ytdlp = False
 
@@ -627,7 +626,7 @@ class SettingsTabMixin:
         self._poll_ytdlp_version()
 
     def _poll_ytdlp_version(self):
-        """Polling dari thread utama untuk memperbarui label versi yt-dlp secara thread-safe."""
+        """Poll the main thread to update the yt-dlp version label."""
         if self._cached_ytdlp_ver:
             if hasattr(self, "lbl_ytdlp_ver") and self.lbl_ytdlp_ver.winfo_exists():
                 self.lbl_ytdlp_ver.configure(text=t("lbl_ytdlp_ver_installed", ver=self._cached_ytdlp_ver))
@@ -650,7 +649,7 @@ class SettingsTabMixin:
         self._poll_ytdlp_update()
 
     def _poll_ytdlp_update(self):
-        """Polling status pembaruan engine yt-dlp dari thread utama."""
+        """Poll the yt-dlp update process status from the main thread."""
         if getattr(self, "_ytdlp_update_result", None) is not None:
             success, status_code, msg, ver = self._ytdlp_update_result
             self._ytdlp_update_result = None
@@ -676,7 +675,7 @@ class SettingsTabMixin:
 
     # ==================== SUBTAB 3: CACHE & DATA ====================
     def _build_subtab_cache(self, parent):
-        # Card 1: Statistik Penyimpanan
+        # Card 1: Storage Statistics
         card_stats = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -701,7 +700,7 @@ class SettingsTabMixin:
         self.lbl_cache_hist = ctk.CTkLabel(p_stats, text=t("lbl_stat_hist", count=0), font=FONT_BODY, text_color=TEXT_SECONDARY, anchor="w")
         self.lbl_cache_hist.pack(fill="x", pady=3)
 
-        # Card 2: Tindakan Pemeliharaan
+        # Card 2: Maintenance Actions
         card_actions = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_CARD,
@@ -821,7 +820,7 @@ class SettingsTabMixin:
                 self._load_history_view()
             self._refresh_cache_stats()
 
-    # ==================== SUBTAB 4: TENTANG ====================
+    # ==================== SUBTAB 4: ABOUT ====================
     def _build_subtab_about(self, parent):
         card_about = ctk.CTkFrame(
             parent,
@@ -880,7 +879,7 @@ class SettingsTabMixin:
 
     # ==================== RETRANSLATE SETTINGS TAB ====================
     def retranslate_settings_tab(self):
-        """Menerapkan terjemahan bahasa baru ke seluruh elemen Tab Pengaturan secara real-time."""
+        """Apply dynamic language translations to all Settings Tab widgets."""
         if hasattr(self, "lbl_settings_header_title"):
             self.lbl_settings_header_title.configure(text=t("settings_title"))
         if hasattr(self, "lbl_settings_header_desc"):
@@ -969,7 +968,7 @@ class SettingsTabMixin:
         if hasattr(self, "btn_settings_reset"):
             self.btn_settings_reset.configure(text=f" {t('btn_reset_form')}")
 
-    # ==================== SIMPAN & RESET ====================
+    # ==================== SAVE & RESET ====================
     def _save_settings_tab(self):
         new_lang = self.var_language.get()
         old_lang = get_active_language()
@@ -1005,7 +1004,7 @@ class SettingsTabMixin:
                 self.retranslate_ui()
             self.retranslate_settings_tab()
 
-        # Tampilkan status inline feedback
+        # Display inline status feedback
         self.lbl_settings_saved_status.configure(text=t("msg_settings_saved"), text_color=STATUS_SUCCESS)
         self.after(3500, lambda: self.lbl_settings_saved_status.configure(text=""))
 
@@ -1013,6 +1012,21 @@ class SettingsTabMixin:
         self._init_settings_variables()
 
         # Reset OptionMenus
+        lang_options = get_available_languages()
+        disp_map = {code: disp for code, disp in lang_options}
+        if hasattr(self, "cbo_lang"):
+            cur_code = self.var_language.get()
+            self.cbo_lang.set(disp_map.get(cur_code, lang_options[0][1]))
+
+        if hasattr(self, "cbo_fmt"):
+            cur_fmt = self.var_audio_format.get()
+            self.cbo_fmt.set(self._fmt_disp_map.get(cur_fmt, "Auto"))
+
+        if hasattr(self, "cbo_conn"):
+            self.cbo_conn.set(str(self.var_connections.get()))
+
+        self.lbl_settings_saved_status.configure(text=t("msg_settings_reset"), text_color=TEXT_SECONDARY)
+        self.after(3000, lambda: self.lbl_settings_saved_status.configure(text=""))
         lang_options = get_available_languages()
         disp_map = {code: disp for code, disp in lang_options}
         if hasattr(self, "cbo_lang"):

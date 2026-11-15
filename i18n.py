@@ -1,14 +1,14 @@
 # -*- coding: utf-8 -*-
-"""Modul Internasionalisasi (i18n) untuk JapaneseASMR Downloader.
+"""Internationalization (i18n) module for JapaneseASMR Downloader.
 
-Mendukung 4 bahasa:
+Supports 4 languages:
 - English ('en')
 - Bahasa Indonesia ('id')
-- 日本語 / Japanese ('ja')
-- 简体中文 / Simplified Chinese ('zh')
+- Japanese ('ja')
+- Simplified Chinese ('zh')
 
-Mendukung deteksi otomatis bahasa sistem Windows dengan fallback berantai dan
-penanganan variasi LCID regional.
+Provides automatic Windows system UI language detection with fallback chains
+and regional LCID primary language bitmasking.
 """
 
 import ctypes
@@ -16,12 +16,12 @@ import locale
 import os
 import sys
 
-# Cache bahasa aktif dalam memori agar tidak membaca disk berulang-ulang
+# In-memory cached active language to avoid repetitive disk I/O
 _ACTIVE_LANG = None
 
 
 class SafeDict(dict):
-    """Kamus aman untuk str.format_map agar tidak melempar KeyError jika ada key hilang."""
+    """Safe dictionary for str.format_map that preserves missing keys rather than raising KeyError."""
     def __missing__(self, key):
         return f"{{{key}}}"
 
@@ -776,11 +776,11 @@ TRANSLATIONS = {
 
 
 def detect_windows_language():
-    """Mendeteksi bahasa Windows pengguna menggunakan Win32 Primary LCID bitmasking.
+    """Detect the user's Windows system UI language using Win32 Primary LCID bitmasking.
     
-    Mengembalikan salah satu dari: 'id', 'ja', 'zh', atau 'en'.
+    Returns one of: 'id', 'ja', 'zh', or 'en'.
     """
-    # 1. Coba Win32 GetUserDefaultUILanguage
+    # 1. Try Win32 GetUserDefaultUILanguage
     try:
         if sys.platform == "win32":
             lcid = ctypes.windll.kernel32.GetUserDefaultUILanguage()
@@ -796,7 +796,7 @@ def detect_windows_language():
     except Exception:
         pass
 
-    # 2. Coba locale default
+    # 2. Try default locale
     try:
         loc = locale.getdefaultlocale()[0]
         if loc:
@@ -812,7 +812,7 @@ def detect_windows_language():
     except Exception:
         pass
 
-    # 3. Coba Environment variables (LANG, LC_ALL)
+    # 3. Try standard environment variables (LANG, LC_ALL, LC_MESSAGES)
     for env_var in ("LANG", "LC_ALL", "LC_MESSAGES"):
         val = os.environ.get(env_var, "").lower()
         if val.startswith("id"):
@@ -828,7 +828,7 @@ def detect_windows_language():
 
 
 def resolve_language(lang_code):
-    """Menyelesaikan kode bahasa. Jika 'auto', mendeteksi bahasa sistem."""
+    """Resolve a language code. If set to 'auto', detects the Windows system UI language."""
     if not lang_code or lang_code == "auto":
         return detect_windows_language()
     code = str(lang_code).lower()
@@ -838,7 +838,7 @@ def resolve_language(lang_code):
 
 
 def get_active_language():
-    """Mengembalikan bahasa yang saat ini aktif dalam memori."""
+    """Retrieve the currently active language code from memory."""
     global _ACTIVE_LANG
     if _ACTIVE_LANG is None:
         try:
@@ -852,22 +852,22 @@ def get_active_language():
 
 
 def set_active_language(lang_code):
-    """Mengatur bahasa aktif dalam memori."""
+    """Set the active language code in memory."""
     global _ACTIVE_LANG
     _ACTIVE_LANG = resolve_language(lang_code)
     return _ACTIVE_LANG
 
 
 def t(key, **kwargs):
-    """Mengambil string terjemahan untuk key tertentu dalam bahasa aktif.
+    """Retrieve the localized string for a given translation key in the active language.
     
-    Menggunakan SafeDict agar tidak melempar KeyError jika ada placeholder yang hilang.
+    Uses SafeDict to avoid KeyError exceptions if placeholders are missing.
     """
     lang = get_active_language()
     lang_dict = TRANSLATIONS.get(lang, TRANSLATIONS["en"])
     template = lang_dict.get(key)
     if template is None:
-        # Fallback ke bahasa Inggris jika key tidak ditemukan di bahasa aktif
+        # Fallback to English if the key is missing from the active language
         template = TRANSLATIONS["en"].get(key, key)
 
     if kwargs and isinstance(template, str):
@@ -879,7 +879,7 @@ def t(key, **kwargs):
 
 
 def get_available_languages():
-    """Mengembalikan list tuple (code, display_name) untuk combobox pengaturan."""
+    """Return a list of (code, display_name) tuples for language selection dropdowns."""
     current_lang = get_active_language()
     auto_label = LANG_DEFINITIONS["auto"].get(current_lang, LANG_DEFINITIONS["auto"]["en"])
     return [
@@ -892,7 +892,7 @@ def get_available_languages():
 
 
 def verify_all_translations():
-    """Uji verifikasi otomatis kelengkapan kunci terjemahan di semua bahasa."""
+    """Verify translation completeness across all supported languages against the English reference."""
     en_keys = set(TRANSLATIONS["en"].keys())
     missing_report = {}
     for lang in ("id", "ja", "zh"):

@@ -1,74 +1,75 @@
 """
-Design System, Tokyo Night Theme Tokens, & Tipografi Modern untuk JapaneseASMR Downloader.
-Palet warna dirancang menggunakan model persepsi OKLCH & Tokyo Night Depth Architecture
-dengan 4 level ketinggian (elevation layers), 2 aksen terukur (Violet & Sky), dan skala sudut/spacing disiplin.
+Design System, Tokyo Night Theme Tokens, and Modern Typography for JapaneseASMR Downloader.
+Color palette designed using perceptual OKLCH color modeling and Tokyo Night Depth Architecture
+with 4 elevation layers, 2 functional accents (Violet and Sky), and a disciplined spacing/corner scale.
 """
 from tkinter import ttk
 import tkinter.font as tkfont
 
-# ==================== PALET WARNA (TOKYO NIGHT & OKLCH) ====================
-# Layer Kedalaman Visual (Depth Architecture)
-BG_SIDEBAR = "#0b0e14"         # Layer 0: Ultra deep navy - Sidebar navigasi menempel rata
-BG_VIEWPORT = "#131722"        # Layer 1: Charcoal navy - Kanvas utama konten
-BG_APP = BG_VIEWPORT           # Alias kompatibilitas
-SURFACE_CARD = "#1e2333"       # Layer 2: Surface card kontainer konten
-SURFACE_ELEVATED = "#282f44"   # Layer 3: Modal, dropdown, card hover/active
-SURFACE_INPUT = "#171b26"      # Background input text field
+# ==================== COLOR PALETTE (TOKYO NIGHT & OKLCH) ====================
+# Visual Depth Architecture Layers
+BG_SIDEBAR = "#0b0e14"         # Layer 0: Ultra-deep navy - Flush sidebar background
+BG_VIEWPORT = "#131722"        # Layer 1: Charcoal navy - Main viewport canvas
+BG_APP = BG_VIEWPORT           # Compatibility alias
+SURFACE_CARD = "#1e2333"       # Layer 2: Card container surface
+SURFACE_ELEVATED = "#282f44"   # Layer 3: Modal dialogs, dropdowns, hovered cards
+SURFACE_INPUT = "#171b26"      # Input text field background
 
-# Garis Batas (Borders)
-BORDER_SUBTLE = "#282f44"      # Border kontainer kartu (1px)
-BORDER_ACTIVE = "#38bdf8"      # Border fokus input / active highlight
-BORDER_MUTED = "#1e2538"       # Pembatas halus
+# Border Tokens
+BORDER_SUBTLE = "#282f44"      # Container boundary border (1px)
+BORDER_ACTIVE = "#38bdf8"      # Active input focus / highlight border
+BORDER_MUTED = "#1e2538"       # Subtle divider border
 
-# 2 Aksen Fungsional (Anti-Rainbow)
-ACCENT_PRIMARY = "#8b5cf6"        # Electric Violet (Tombol utama, tab aktif, progress)
-ACCENT_PRIMARY_HOVER = "#7c3aed"  # Hover state violet
-ACCENT_HOVER = ACCENT_PRIMARY_HOVER # Alias kompatibilitas
-ACCENT_MUTED = "#4c1d95"          # Dark violet badge background
+# Functional Accent Tokens
+ACCENT_PRIMARY = "#8b5cf6"        # Electric Violet (Primary buttons, active tabs, progress bars)
+ACCENT_PRIMARY_HOVER = "#7c3aed"  # Primary hover state
+ACCENT_HOVER = ACCENT_PRIMARY_HOVER  # Compatibility alias
+ACCENT_MUTED = "#4c1d95"          # Muted violet badge background
 
-ACCENT_SECONDARY = "#38bdf8"      # Sky Blue (Status pemutaran aktif, pill info)
+ACCENT_SECONDARY = "#38bdf8"      # Sky Blue (Playback status, active pill indicators)
 ACCENT_SECONDARY_HOVER = "#0ea5e9"
-STATUS_INFO = ACCENT_SECONDARY    # Alias kompatibilitas
+STATUS_INFO = ACCENT_SECONDARY    # Compatibility alias
 
-# Status Semantik
-STATUS_SUCCESS = "#10b981"     # Emerald Green (Selesai unduh, simpan sukses)
-STATUS_WARNING = "#f59e0b"     # Amber (Peringatan, skip track)
-STATUS_DANGER = "#f43f5e"      # Rose / Danger (Hapus, stop playback)
+# Semantic Status Tokens
+STATUS_SUCCESS = "#10b981"     # Emerald Green (Download completed, save successful)
+STATUS_WARNING = "#f59e0b"     # Amber (Warning, skip action)
+STATUS_DANGER = "#f43f5e"      # Rose / Danger (Delete, stop playback)
 
-# Tipografi & Teks
-TEXT_PRIMARY = "#f8fafc"       # Putih salju kontras tinggi (Kontras >= 12:1)
-TEXT_SECONDARY = "#cbd5e1"     # Slate 300 - Label sekunder, metadata
-TEXT_MUTED = "#94a3b8"         # Slate 400 - Placeholder, status pasif
-TEXT_DIM = "#64748b"           # Slate 500 - Border label / disable
+# Typography Text Colors
+TEXT_PRIMARY = "#f8fafc"       # Snow white high-contrast text (Contrast >= 12:1)
+TEXT_SECONDARY = "#cbd5e1"     # Slate 300 - Secondary labels, metadata
+TEXT_MUTED = "#94a3b8"         # Slate 400 - Placeholders, inactive status
+TEXT_DIM = "#64748b"           # Slate 500 - Inactive border labels, disabled controls
 
-# ==================== SKALA SUDUT (CORNER RADII) ====================
-RADIUS_SIDEBAR = 0             # Rata menempel ke sisi jendela
-RADIUS_CARD = 10               # Kontainer kartu & frame konten
-RADIUS_BUTTON = 8              # Tombol aksi & input field
-RADIUS_INPUT = 8               # Input entry & combobox
-RADIUS_PILL = 9999             # Status pill & tombol playback bulat
+# ==================== CORNER RADII SCALE ====================
+RADIUS_SIDEBAR = 0             # Flush edge-to-edge docking
+RADIUS_CARD = 10               # Card containers and major content frames
+RADIUS_BUTTON = 8              # Action buttons and text inputs
+RADIUS_INPUT = 8               # Input entries and comboboxes
+RADIUS_PILL = 9999             # Circular pill badges and playback controls
 
-# Alias kompatibilitas
+# Compatibility aliases
 RADIUS_SM = 6
 RADIUS_MD = 8
 RADIUS_LG = 12
 RADIUS_ROUND = 9999
 
-# ==================== SKALA SPACING DISIPLIN ====================
-SPACE_XS = 4                   # Micro: gap ikon & teks
-SPACE_SM = 8                   # Tight: padding internal item
-SPACE_MD = 12                  # Standard: jarak antar kartu vertikal
-SPACE_LG = 16                  # Relaxed: margin antar grup tombol
-SPACE_XL = 24                  # Section: padding halaman utama
+# ==================== DISCIPLINED SPACING SCALE ====================
+SPACE_XS = 4                   # Micro: gap between icon and text
+SPACE_SM = 8                   # Tight: internal item padding
+SPACE_MD = 12                  # Standard: vertical spacing between cards
+SPACE_LG = 16                  # Relaxed: margins between button groups
+SPACE_XL = 24                  # Section: main page padding
 
-# ==================== TIPOGRAFI MODERN DENGAN FALLBACK TERUJI ====================
+# ==================== MODERN TYPOGRAPHY & FALLBACK SYSTEM ====================
 _RESOLVED_FONTS = {}
 
 def get_system_font_family(is_display: bool = False, is_mono: bool = False) -> str:
     """
-    Mendeteksi keluarga font yang terpasang di sistem operasi dengan fallback cerdas:
-    Windows 11 -> Segoe UI Variable Display/Text
-    Windows 10 / Fallback -> Inter -> Segoe UI -> Yu Gothic UI -> sans-serif
+    Detect and resolve installed system font families with intelligent fallback:
+    Windows: Yu Gothic UI -> Segoe UI Variable -> Segoe UI -> sans-serif.
+    Yu Gothic UI is prioritized on Windows so Japanese (Kanji/Kana) and Latin
+    characters share matching, balanced, elegant stroke weights (preventing bold Meiryo fallback).
     """
     key = (is_display, is_mono)
     if key in _RESOLVED_FONTS:
@@ -88,8 +89,8 @@ def get_system_font_family(is_display: bool = False, is_mono: bool = False) -> s
 
     try:
         available = set(tkfont.families())
-        # Prioritaskan Yu Gothic UI pada Windows jika tersedia, agar karakter bahasa Jepang (Kanji/Kana)
-        # dan karakter Latin dirender secara seimbang dengan ketebalan normal yang ramping (mencegah fallback tebal Meiryo).
+        # Prioritize Yu Gothic UI on Windows if available so Japanese (Kanji/Kana)
+        # and Latin characters render with balanced normal stroke weights without heavy Meiryo fallback.
         if "Yu Gothic UI" in available:
             font_name = "Yu Gothic UI"
         elif is_display and "Segoe UI Variable Display" in available:
@@ -127,8 +128,8 @@ FONT_CODE = (FONT_MONO_FAMILY, 10, "normal")
 
 def configure_ttk_dark_theme(style: ttk.Style):
     """
-    Mengonfigurasi tema ttk bawaan (seperti ttk.Treeview dan Scrollbar)
-    agar serasi dengan kanvas gelap Tokyo Night.
+    Configure native ttk widget themes (Treeview, Scrollbar)
+    to seamlessly match the Tokyo Night dark aesthetic.
     """
     style.theme_use("clam")
 

@@ -58,16 +58,16 @@ class JapaneseASMRApp(
     SettingsTabMixin,
     DownloadWorkerMixin,
 ):
-    """Aplikasi Desktop Utama JapaneseASMR Downloader & Audio Player v1.2.0."""
+    """Primary desktop GUI application for JapaneseASMR Downloader and Player."""
     def __init__(self):
-        # Set Explicit AppUserModelID agar Taskbar Windows menampilkan ikon custom
+        # Set explicit AppUserModelID so Windows Taskbar associates the custom icon
         if sys.platform == "win32":
             try:
                 ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("SayMaven.JapaneseASMR.Downloader.App")
             except Exception:
                 pass
 
-        # Inisialisasi CustomTkinter dengan Tema Tokyo Night Kustom
+        # Initialize CustomTkinter with custom Tokyo Night theme
         ctk.set_appearance_mode("dark")
         theme_json_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -85,13 +85,13 @@ class JapaneseASMRApp(
 
         super().__init__()
         self.title("JapaneseASMR Downloader & Player - v1.2.0")
-        # Dimensi Responsif Ramah Laptop (Default 1360x800, Minsize 1120x660)
+        # Laptop-friendly responsive window geometry (default 1360x800, minsize 1120x660)
         self.geometry("1360x800")
         self.minsize(1120, 660)
         self.configure(fg_color=BG_VIEWPORT)
         apply_dark_titlebar(self)
 
-        # Config & State
+        # Configuration and state tracking
         self.config = load_config()
         self.is_downloading = False
         self.stop_requested = False
@@ -103,7 +103,7 @@ class JapaneseASMRApp(
         self.var_auto_clipboard = tk.BooleanVar(value=self.config.get("auto_clipboard", True))
         self._syncing_chaps = set()
 
-        # Audio Player State (Windows Native MCI & Media Foundation Engine)
+        # Audio player state (Windows Native MCI & Media Foundation engines)
         self.mf_player = NativeMFPlayer()
         self.use_mf_player = False
         self.current_playing_file = None
@@ -121,7 +121,7 @@ class JapaneseASMRApp(
         self.active_chapter_index = -1
         self._chapters_cache = {}
 
-        # Set Window & Taskbar Icon
+        # Set window and taskbar icons
         self._settings_dialog = None
         self._setup_app_icons()
 
@@ -133,7 +133,7 @@ class JapaneseASMRApp(
 
         self.protocol("WM_DELETE_WINDOW", self._on_app_close)
 
-        # Re-apply icon setelah window di-render sempurna oleh Windows DWM
+        # Re-apply taskbar icon once window frame is fully initialized by Windows DWM
         if sys.platform == "win32":
             self._icon_after_id = self.after(150, self._apply_win32_taskbar_icon)
         else:
@@ -213,7 +213,7 @@ class JapaneseASMRApp(
         configure_ttk_dark_theme(style)
 
     def _build_ui(self):
-        # Master Layout: Sidebar Navigasi Kiri (Docked corner_radius=0) + Content Viewport Kanan
+        # Master layout: Left navigation sidebar and right content viewport
         self.sidebar = ctk.CTkFrame(
             self,
             width=240,
@@ -225,7 +225,7 @@ class JapaneseASMRApp(
         self.sidebar.pack(side="left", fill="y")
         self.sidebar.pack_propagate(False)
 
-        # 1. Branding Header
+        # 1. Branding header
         brand_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         brand_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_LG + 2, SPACE_LG))
 
@@ -247,7 +247,7 @@ class JapaneseASMRApp(
         )
         self.lbl_brand_sub.pack(fill="x", pady=(2, 0))
 
-        # 2. Navigasi 4 Tab Vertikal (Zero Emoji, Ikon Vektor Konsisten)
+        # 2. Vertical 4-tab navigation (vector icons)
         self.lbl_nav_header = ctk.CTkLabel(
             self.sidebar,
             text=t("nav_main_header"),
@@ -316,11 +316,11 @@ class JapaneseASMRApp(
         )
         self.btn_nav_settings.pack(fill="x", padx=SPACE_MD, pady=3)
 
-        # Spacer di tengah
+        # Vertical flexible spacer
         spacer = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         spacer.pack(fill="both", expand=True)
 
-        # 3. Sidebar Footer (Info Folder Unduhan Aktif)
+        # 3. Sidebar footer (active storage directory status)
         footer_frame = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         footer_frame.pack(fill="x", padx=SPACE_MD, pady=(0, SPACE_LG), side="bottom")
 
@@ -378,7 +378,7 @@ class JapaneseASMRApp(
         )
         self.btn_change_dir.pack(fill="x")
 
-        # 4. Viewport Konten Utama (Kanan)
+        # 4. Primary content viewport
         self.viewport = ctk.CTkFrame(self, fg_color=BG_VIEWPORT, corner_radius=0)
         self.viewport.pack(side="right", fill="both", expand=True)
 
@@ -392,7 +392,7 @@ class JapaneseASMRApp(
         self._build_player_tab()
         self._build_settings_tab()
 
-        # Notebook shim kompatibilitas
+        # Compatibility notebook shim
         self.current_page = "queue"
         class _NotebookShim:
             def __init__(shim_self, app):
@@ -403,12 +403,12 @@ class JapaneseASMRApp(
                 return shim_self.app.current_page
         self.notebook = _NotebookShim(self)
 
-        # Default ke tab antrean & pastikan geometri jendela terkunci
+        # Default to queue tab and lock initial geometry
         self._select_page("queue")
         self.geometry("1360x800")
 
     def _select_page(self, page):
-        """Mengatur pergantian 4 tab konten di viewport secara instan."""
+        """Handle instant switching between viewport tabs."""
         tabs = [
             ("queue", self.tab_queue, self.btn_nav_queue),
             ("history", self.tab_history, self.btn_nav_history),
@@ -448,11 +448,11 @@ class JapaneseASMRApp(
                     self.entry_set_dir.insert(0, cur_d)
 
     def open_settings_dialog(self):
-        """Buka tab Pengaturan secara langsung di viewport utama."""
+        """Navigate directly to the Settings Tab in the primary viewport."""
         self._select_page("settings")
 
     def sync_download_directory(self, new_dir):
-        """Menyinkronkan folder unduhan ke config, label footer sidebar, input tab settings, dan refresh playlist."""
+        """Synchronize active download directory across config, footer labels, settings input, and player playlist."""
         if not new_dir:
             return
         abs_d = os.path.abspath(new_dir)
@@ -469,7 +469,7 @@ class JapaneseASMRApp(
             self._refresh_playlist_view()
 
     def retranslate_ui(self):
-        """Menerapkan terjemahan bahasa aktif ke seluruh elemen GUI seketika tanpa emoji."""
+        """Apply active language translations across all GUI elements in real time."""
         self.title(f"{t('app_title')} - v1.2.0")
 
         if hasattr(self, "lbl_nav_header"):

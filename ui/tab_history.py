@@ -52,18 +52,18 @@ from ui.theme import (
 
 
 class HistoryTabMixin:
-    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Riwayat (History) v1.2.0."""
+    """Mixin providing interface construction and interaction handlers for the History Tab."""
     def _build_history_tab(self):
         container = self.tab_history
 
-        # Layout 2 Kolom: Kiri (Tabel Riwayat & Pencarian), Kanan (Detail & Cover)
+        # 2-Column layout: Left (History Table & Search), Right (Details & Cover Art)
         main_container = ctk.CTkFrame(container, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
         left_h_panel = ctk.CTkFrame(main_container, fg_color="transparent")
         left_h_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
-        # 1. Header Riwayat & Kontrol (Modern Card)
+        # 1. History header and search controls
         header_card = ctk.CTkFrame(
             left_h_panel,
             corner_radius=RADIUS_CARD,
@@ -133,7 +133,7 @@ class HistoryTabMixin:
         )
         self.btn_clear_search.pack(side="right")
 
-        # 2. Tabel Riwayat (Modern Card)
+        # 2. History table card
         table_card = ctk.CTkFrame(
             left_h_panel,
             corner_radius=RADIUS_CARD,
@@ -143,7 +143,7 @@ class HistoryTabMixin:
         )
         table_card.pack(fill="both", expand=True, pady=(0, SPACE_MD))
 
-        # Banner Statistik Penyimpanan
+        # Storage statistics banner
         stats_frame = ctk.CTkFrame(table_card, fg_color="transparent")
         stats_frame.pack(fill="x", padx=SPACE_LG, pady=(SPACE_MD, SPACE_SM // 2))
 
@@ -156,7 +156,7 @@ class HistoryTabMixin:
         )
         self.lbl_hist_stats.pack(fill="x")
 
-        # Tabel Riwayat Treeview
+        # History Treeview table
         tree_container = ctk.CTkFrame(
             table_card,
             corner_radius=RADIUS_CARD,
@@ -186,7 +186,7 @@ class HistoryTabMixin:
         self.hist_tree.bind("<<TreeviewSelect>>", self._on_history_select)
         self.hist_tree.bind("<Double-1>", lambda e: self._play_history_in_player())
 
-        # 3. Panel Kanan Riwayat (Detail & Cover)
+        # 3. Right detail panel (Details & Cover art)
         self.right_h_panel = ctk.CTkFrame(
             main_container,
             width=320,
@@ -210,7 +210,7 @@ class HistoryTabMixin:
         )
         self.lbl_hist_detail_title.pack(side="left")
 
-        # Canvas Cover
+        # Cover canvas
         self.hist_canvas = tk.Canvas(
             self.right_h_panel,
             bg=SURFACE_INPUT,
@@ -225,7 +225,7 @@ class HistoryTabMixin:
             145, 97, text="Pilih item riwayat", fill=TEXT_MUTED, font=FONT_BODY
         )
 
-        # Tombol Aksi di Bawah Panel Kanan
+        # Action buttons at the bottom of the right panel
         h_actions = ctk.CTkFrame(self.right_h_panel, fg_color="transparent")
         h_actions.pack(fill="x", padx=SPACE_LG, pady=SPACE_MD, side="bottom")
 
@@ -411,7 +411,7 @@ class HistoryTabMixin:
             threading.Thread(target=load_online_cover, daemon=True).start()
 
     def _play_history_in_player(self):
-        """Memutar file riwayat terpilih langsung di Tab Pemutar Audio."""
+        """Play the selected history item directly within the Audio Player Tab."""
         selected = self.hist_tree.selection()
         if not selected:
             return

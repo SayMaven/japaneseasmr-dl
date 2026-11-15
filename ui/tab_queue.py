@@ -58,18 +58,18 @@ from ui.theme import (
 
 
 class QueueTabMixin:
-    """Mixin untuk membangun antarmuka dan menangani aksi pada Tab Antrean (Queue) v1.2.0."""
+    """Mixin providing interface construction and interaction handlers for the Queue Tab."""
     def _build_queue_tab(self):
         container = self.tab_queue
 
-        # Layout 2 Kolom: Kiri (Input & Tabel), Kanan (Cover & Info Detail)
+        # 2-Column layout: Left (Input & Queue Table), Right (Cover Preview & Details)
         main_container = ctk.CTkFrame(container, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
         left_panel = ctk.CTkFrame(main_container, fg_color="transparent")
         left_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
-        # 1. Baris Input & Tombol Tambah (Modern Card)
+        # 1. Input row and action controls card
         self.input_card = ctk.CTkFrame(
             left_panel,
             corner_radius=RADIUS_CARD,
@@ -154,7 +154,7 @@ class QueueTabMixin:
         )
         self.chk_name.pack(side="left")
 
-        # 2. Tabel Antrean & Kontrol Aksi (Modern Card)
+        # 2. Queue table and action controls card
         self.queue_card = ctk.CTkFrame(
             left_panel,
             corner_radius=RADIUS_CARD,
@@ -357,12 +357,12 @@ class QueueTabMixin:
         self.log_text.pack(side="left", fill="both", expand=True)
         log_scroll.pack(side="right", fill="y")
 
-        # Susun panel kiri: Elemen bawah dipack lebih dulu agar tinggi minimumnya terjamin
+        # Arrange left panel: Bottom elements packed first to ensure guaranteed minimum height
         log_card.pack(side="bottom", fill="x")
         progress_card.pack(side="bottom", fill="x", pady=(0, SPACE_MD))
         self.queue_card.pack(side="top", fill="both", expand=True, pady=(0, SPACE_MD))
 
-        # Panel Kanan: Preview Thumbnail & Info Card
+        # Right panel: Thumbnail preview and metadata card
         self.right_panel = ctk.CTkFrame(
             main_container,
             width=320,
@@ -386,7 +386,7 @@ class QueueTabMixin:
         )
         self.lbl_preview_title.pack(side="left")
 
-        # Canvas Cover
+        # Cover canvas
         self.cover_canvas = tk.Canvas(
             self.right_panel,
             bg=SURFACE_INPUT,
@@ -401,7 +401,7 @@ class QueueTabMixin:
             145, 97, text="Tidak ada cover", fill=TEXT_MUTED, font=FONT_BODY
         )
 
-        # Info Labels
+        # Info labels container
         info_inner = ctk.CTkScrollableFrame(self.right_panel, fg_color="transparent")
         info_inner.pack(fill="both", expand=True, padx=SPACE_SM, pady=(4, SPACE_MD))
 

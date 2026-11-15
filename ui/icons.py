@@ -1,23 +1,23 @@
 """
-Modul manajemen ikon vektor transparan pre-rendered untuk CustomTkinter.
-Menggunakan in-memory PIL caching untuk performa instan tanpa parsing SVG runtime,
-100% kompatibel dengan Nuitka standalone dan multi-window/restart di Windows.
+Vector icon management module with pre-rendered transparent assets for CustomTkinter.
+Uses in-memory PIL caching for zero-overhead performance without runtime SVG parsing,
+fully compatible with Nuitka standalone bundles and multi-window/restart lifecycles on Windows.
 """
 import os
 from typing import Tuple, Optional
 from PIL import Image
 import customtkinter as ctk
 
-# Lokasi folder aset ikon
+# Base directory paths for icon assets
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ICONS_DIR = os.path.join(BASE_DIR, "assets", "icons")
 
-# Cache PIL Image murni (independen dari state Tkinter)
+# In-memory pure PIL image cache (decoupled from Tkinter widget state)
 _PIL_CACHE = {}
-_ICON_CACHE = _PIL_CACHE  # Alias kompatibilitas
+_ICON_CACHE = _PIL_CACHE  # Compatibility alias
 
 def clear_icon_cache():
-    """Mengosongkan cache in-memory PIL image."""
+    """Clear the in-memory PIL image cache."""
     global _PIL_CACHE
     _PIL_CACHE.clear()
 
@@ -29,10 +29,10 @@ def _hex_to_rgb(hex_str: str) -> Tuple[int, int, int]:
 
 def get_icon(name: str, size: Tuple[int, int] = (18, 18), color: Optional[str] = None) -> ctk.CTkImage:
     """
-    Mengambil ikon CTkImage berdasarkan nama.
-    Jika color ditentukan (format hex '#ffffff'), ikon akan ditint ke warna tersebut.
-    Meng-cache PIL.Image di memori sehingga performa instan (<0.01ms) dan aman
-    terhadap lifecycle root window Tkinter.
+    Retrieve a cached CTkImage icon by name.
+    If color is specified (hex format '#ffffff'), the icon is tinted accordingly.
+    Caches the underlying PIL.Image in memory for instant retrieval (<0.01ms)
+    independent of Tkinter root window lifecycles.
     """
     cache_key = (name, size, color)
     if cache_key in _PIL_CACHE:
@@ -62,7 +62,7 @@ def get_icon(name: str, size: Tuple[int, int] = (18, 18), color: Optional[str] =
 
             _PIL_CACHE[cache_key] = final_img
         except Exception as e:
-            print(f"[ui.icons] Gagal memuat ikon '{name}': {e}")
+            print(f"[ui.icons] Failed to load icon '{name}': {e}")
             final_img = Image.new("RGBA", (size[0] * 2, size[1] * 2), (0, 0, 0, 0))
             _PIL_CACHE[cache_key] = final_img
 

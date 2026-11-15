@@ -10,14 +10,14 @@ USER_AGENT = (
 
 
 def sanitize_filename(name):
-    """Membersihkan karakter yang dilarang pada sistem file Windows."""
+    """Sanitize strings by removing characters forbidden by the Windows filesystem."""
     clean = re.sub(r'[\\/*?:"<>|]', "", name)
     clean = clean.strip().rstrip(".")
     return clean if clean else "audio"
 
 
 def check_url_accessible(url, referer="https://japaneseasmr.com", user_agent=USER_AGENT, timeout=3.5):
-    """Mengecek apakah URL gambar/audio dapat diakses (HTTP 200/206)."""
+    """Check whether a remote image or audio URL is accessible (HTTP 200/206)."""
     headers = {"User-Agent": user_agent, "Range": "bytes=0-10"}
     if referer:
         headers["Referer"] = referer
@@ -33,11 +33,11 @@ def check_url_accessible(url, referer="https://japaneseasmr.com", user_agent=USE
 
 def resolve_best_cover_url(rj_id, dlsite_cover=None):
     """
-    Menentukan URL gambar cover terbaik dengan alur fallback:
-    1. pic.weeabo0.xyz (JapaneseASMR) jika tersedia.
-    2. DLsite HD Cover (og:image / modpub) jika tersedia.
+    Determine the optimal cover art URL using a multi-tier fallback chain:
+    1. pic.weeabo0.xyz (JapaneseASMR) if available.
+    2. DLsite HD Cover (og:image / modpub) if accessible.
     3. asmr.one cover art (mainCoverUrl).
-    4. Fallback default ke pic.weeabo0.xyz.
+    4. Default fallback to pic.weeabo0.xyz.
     """
     clean_id = rj_id.strip().upper()
     weeabo_url = f"https://pic.weeabo0.xyz/{clean_id}_img_main.jpg"
@@ -47,7 +47,7 @@ def resolve_best_cover_url(rj_id, dlsite_cover=None):
     if dlsite_cover and check_url_accessible(dlsite_cover, referer="https://www.dlsite.com"):
         return dlsite_cover
 
-    # Fallback ke asmr.one
+    # Fallback to asmr.one
     num_id = re.sub(r'^[A-Za-z]+', '', clean_id)
     if num_id:
         asmrone_cover = f"https://api.asmr.one/api/cover/{num_id}.jpg?type=main"
@@ -59,8 +59,8 @@ def resolve_best_cover_url(rj_id, dlsite_cover=None):
 
 def enrich_metadata_from_asmrone(rj_id, info):
     """
-    Fallback untuk karya yang terkena geo-blocking DLsite atau yang tabel outlinenya tidak ter-render.
-    Mengambil CV/Seiyuu dan Genre/Tag dari asmr.one API yang tidak dibatasi region.
+    Fallback metadata enrichment for items subject to DLsite geo-blocking or unrendered outline tables.
+    Retrieves CV/Voice Actor, Circle, and Genre tags from the region-unrestricted asmr.one API.
     """
     clean_id = rj_id.strip().upper()
     num_id = re.sub(r'^[A-Za-z]+', '', clean_id)
@@ -80,13 +80,13 @@ def enrich_metadata_from_asmrone(rj_id, info):
         with urllib.request.urlopen(req, timeout=4.5) as resp:
             data = json.loads(resp.read().decode("utf-8"))
 
-            # 1. CV / Seiyuu
+            # 1. Voice Actor / CV
             if info.get("cv") == "-" and data.get("vas"):
                 vas = [v.get("name", "").strip() for v in data.get("vas", []) if v.get("name")]
                 if vas:
                     info["cv"] = ", ".join(vas)
 
-            # 2. Genre / Tags (utamakan tag Jepang melalui i18n jika ada agar seragam dengan DLsite)
+            # 2. Genre / Tags (prioritize Japanese tags from i18n field for DLsite uniformity)
             if info.get("genre") == "-" and data.get("tags"):
                 tags = []
                 for t in data.get("tags", []):
@@ -97,7 +97,7 @@ def enrich_metadata_from_asmrone(rj_id, info):
                 if tags:
                     info["genre"] = ", ".join(tags)
 
-            # 3. Circle / Maker jika masih '-'
+            # 3. Circle / Maker
             if info.get("circle") == "-":
                 c = data.get("circle")
                 if isinstance(c, dict) and c.get("name"):
@@ -105,7 +105,7 @@ def enrich_metadata_from_asmrone(rj_id, info):
                 elif data.get("name"):
                     info["circle"] = str(data["name"]).strip()
 
-            # 4. Age Rating jika masih '-'
+            # 4. Age Rating
             if info.get("age_rating") == "-":
                 age = data.get("age_category_string")
                 if age:
@@ -117,7 +117,7 @@ def enrich_metadata_from_asmrone(rj_id, info):
 
 
 def fetch_dlsite_metadata(rj_id, *args, **kwargs):
-    """Mengambil metadata karya (Judul, CV, Circle, Genre, Rating, Cover HD) langsung dari DLsite resmi."""
+    """Scrape work metadata (Title, CV, Circle, Genre, Age Rating, HD Cover) directly from official DLsite pages."""
     clean_id = rj_id.strip().upper()
     info = {
         "title": clean_id,
@@ -147,14 +147,14 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
             with urllib.request.urlopen(req, timeout=6) as resp:
                 page_html = resp.read().decode("utf-8", errors="ignore")
 
-            # 0. Ambil Cover HD Resmi dari og:image DLsite
+            # 0. Retrieve Official HD Cover from DLsite og:image
             og_match = re.search(r'<meta\s+property=["\']og:image["\']\s+content=["\'](.*?)["\']', page_html, re.IGNORECASE)
             if not og_match:
                 og_match = re.search(r'<meta\s+name=["\']twitter:image["\']\s+content=["\'](.*?)["\']', page_html, re.IGNORECASE)
             if og_match:
                 info["dlsite_cover_url"] = html.unescape(og_match.group(1).strip())
 
-            # 1. Ambil Judul
+            # 1. Parse Title
             title_match = re.search(r'<meta itemprop="name" content="(.*?)">', page_html)
             if not title_match:
                 title_match = re.search(r'id=["\']work_name["\'][^>]*>(.*?)</h1>', page_html, re.DOTALL)
@@ -166,7 +166,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                 raw_title = raw_title.replace(" | DLsite", "").replace(" - DLsite", "").strip()
                 info["title"] = html.unescape(raw_title)
 
-            # 2. Ambil Circle / Maker
+            # 2. Parse Circle / Maker
             maker_match = re.search(r'<th>\s*(?:サークル名|ブランド名|メーカー名|著者)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if maker_match:
                 makers = re.findall(r'<a[^>]*>(.*?)</a>', maker_match.group(1), re.DOTALL)
@@ -193,7 +193,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                     else:
                         info["circle"] = raw_brand
 
-            # 3. Ambil CV / Voice Actor dari Tabel
+            # 3. Parse Voice Actor / CV from table
             cv_match = re.search(r'<th>\s*(?:声優|キャラクターボイス|ボイス|キャスト)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if cv_match:
                 cvs = re.findall(r'<a[^>]*>(.*?)</a>', cv_match.group(1), re.DOTALL)
@@ -205,7 +205,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                     if raw_cv_td:
                         info["cv"] = html.unescape(raw_cv_td)
 
-            # 4. Fallback CV dari Judul / Deskripsi / Teks Halaman jika belum terisi
+            # 4. Fallback CV extraction from Title / Description / Body text
             if info["cv"] == "-":
                 desc_match = re.search(r'<meta itemprop="description" content="(.*?)">', page_html, re.DOTALL)
                 desc_text = html.unescape(desc_match.group(1)) if desc_match else ""
@@ -226,7 +226,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                 if valid_cvs:
                     info["cv"] = ", ".join(valid_cvs)
 
-            # 5. Ambil Genre / Tag dari Tabel atau Meta Keywords DLsite
+            # 5. Parse Genre / Tag from Table or Meta Keywords
             genre_match = re.search(r'<th>\s*(?:ジャンル|タグ)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if genre_match:
                 g_links = re.findall(r'<a[^>]*>(.*?)</a>', genre_match.group(1), re.DOTALL)
@@ -238,7 +238,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                     if raw_g:
                         info["genre"] = html.unescape(", ".join([x.strip() for x in raw_g.splitlines() if x.strip()]))
 
-            # Fallback Genre dari meta keywords
+            # Fallback Genre from meta keywords
             if info["genre"] == "-":
                 kw_match = re.search(r'<meta name="keywords" content="(.*?)">', page_html)
                 if kw_match:
@@ -248,7 +248,7 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
                     if filtered_kws:
                         info["genre"] = ", ".join(filtered_kws[:12])
 
-            # 6. Ambil Rating Usia (年齢指定)
+            # 6. Parse Age Rating (年齢指定)
             age_match = re.search(r'<th>\s*(?:年齢指定|レーティング)\s*</th>\s*<td[^>]*>(.*?)</td>', page_html, re.DOTALL)
             if age_match:
                 clean_age = re.sub(r'<[^>]+>', '', age_match.group(1)).strip()
@@ -264,12 +264,11 @@ def fetch_dlsite_metadata(rj_id, *args, **kwargs):
         except Exception:
             continue
 
-    # 7. Fallback Enrichment via asmr.one jika CV atau Genre masih kosong '-'
-    # (Penyebab utama: karya terkena geo-blocking DLsite sehingga tabel detail tidak dikirim oleh server DLsite)
+    # 7. Fallback enrichment via asmr.one if CV or Genre remains unpopulated
     if info.get("cv") == "-" or info.get("genre") == "-" or info.get("circle") == "-":
         info = enrich_metadata_from_asmrone(clean_id, info)
 
-    # Resolusi cover terbaik (Weeabo0 -> DLsite HD -> asmr.one)
+    # Resolve optimal cover art URL
     info["cover_url"] = resolve_best_cover_url(clean_id, info.get("dlsite_cover_url"))
     return info
 

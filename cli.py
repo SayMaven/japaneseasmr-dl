@@ -18,7 +18,7 @@ from config_manager import (
 from dlsite_scraper import fetch_dlsite_metadata, resolve_best_cover_url, sanitize_filename
 from i18n import t
 
-# Inisialisasi warna terminal ANSI & konfigurasi encoding UTF-8 untuk Windows
+# Initialize ANSI terminal color support and UTF-8 stream encoding on Windows
 if sys.platform == "win32":
     os.system("")
     if hasattr(sys.stdout, "reconfigure"):
@@ -26,7 +26,7 @@ if sys.platform == "win32":
     if hasattr(sys.stderr, "reconfigure"):
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
-# Kode Warna ANSI
+# ANSI Color Codes
 RESET = "\033[0m"
 BOLD = "\033[1m"
 GREEN = "\033[92m"
@@ -50,7 +50,7 @@ def print_banner():
 
 
 def parse_rj_ids(input_text):
-    """Mengekstrak list ID/Kode dari input (support pemisah koma, spasi, newline, dan URL asmr.one / japaneseasmr / dlsite)."""
+    """Extract a list of work IDs from raw user input (supports comma, space, newline separators, and URLs)."""
     if not input_text.strip():
         return [DEFAULT_ID]
     raw_tokens = re.split(r"[\s,;]+", input_text.strip())
@@ -179,7 +179,7 @@ def process_single_id(rj_id, current_index, total_count):
     cfg = load_config()
     download_dir = get_download_dir()
 
-    # Ambil metadata resmi dari DLsite
+    # Fetch official metadata from DLsite
     print(f"\n{CYAN}[*] Mengambil informasi karya dari DLsite...{RESET}")
     meta = fetch_dlsite_metadata(rj_id)
     title = meta.get("title", rj_id)
@@ -193,7 +193,7 @@ def process_single_id(rj_id, current_index, total_count):
     clean_title = sanitize_filename(title) if (cfg.get("use_detailed_filename") and title and title != rj_id) else ""
     base_fname = f"[{rj_id}] {clean_title}" if clean_title else rj_id
 
-    # Cek jika file sudah ada
+    # Check if target file already exists
     if configured_fmt == "auto":
         possible_existing = [
             os.path.join(download_dir, f"{base_fname}.m4a"),
@@ -230,7 +230,7 @@ def process_single_id(rj_id, current_index, total_count):
     temp_files = [temp_cover]
 
     try:
-        # 0. Deteksi Multi-Track & Omake
+        # 0. Multi-track and omake detection
         print(f"{CYAN}[0/3] Mendeteksi track audio & omake...{RESET}")
         tracks = discover_all_audio_tracks(rj_id, REFERER, USER_AGENT)
         track_names = [t["name"] for t in tracks]
@@ -245,11 +245,11 @@ def process_single_id(rj_id, current_index, total_count):
         else:
             print(f"{GREEN}[i] Terdeteksi 1 track utama.{RESET}")
 
-        # 1. Download Cover
+        # 1. Download cover art
         print(f"{CYAN}[1/3] Mendownload cover image...{RESET}")
         download_cover(cover_url, temp_cover, rj_id=rj_id, dlsite_cover=meta.get("dlsite_cover_url"))
 
-        # 2. Download Semua Track
+        # 2. Download all audio tracks
         downloaded_track_files = []
         for t_idx, track_info in enumerate(tracks, start=1):
             t_name = track_info["name"]
@@ -269,7 +269,7 @@ def process_single_id(rj_id, current_index, total_count):
             print(f"{CYAN}[2/3] Mengunduh {t_name} [{t_idx}/{len(tracks)}] (16 koneksi)...{RESET}")
             download_audio(t_url, t_out_tmpl, referer=t_ref)
 
-            # Deteksi file audio yang berhasil dibuat (berbagai format audio asli)
+            # Detect successfully created audio file
             prefix = f"temp_{rj_id}_t{t_idx}."
             candidates = [
                 os.path.join(temp_dir, f) for f in os.listdir(temp_dir)
@@ -283,7 +283,7 @@ def process_single_id(rj_id, current_index, total_count):
                 raise FileNotFoundError(f"File audio untuk {t_name} gagal diunduh.")
             downloaded_track_files.append(actual_file)
 
-        # 3. Tentukan nama dan format file output akhir (Smart Native Container)
+        # 3. Determine final output filename and container format
         if configured_fmt == "auto":
             first_codec = get_audio_codec(downloaded_track_files[0]) if downloaded_track_files else ""
             out_ext = ".m4a" if first_codec == "aac" else (".mp3" if first_codec == "mp3" else ".m4a")
@@ -291,7 +291,7 @@ def process_single_id(rj_id, current_index, total_count):
         else:
             final_output = os.path.join(download_dir, f"{base_fname}.{configured_fmt}")
 
-        # 3. Merge Tracks & Embed Cover Art + Metadata & Chapters
+        # 4. Merge tracks and embed cover art, chapters, and metadata
         if len(downloaded_track_files) > 1:
             print(f"{CYAN}[3/3] Menggabungkan {len(downloaded_track_files)} track, menyematkan penanda bab & metadata...{RESET}")
         else:
@@ -306,7 +306,7 @@ def process_single_id(rj_id, current_index, total_count):
             log_func=lambda msg: print(f"{CYAN}{msg}{RESET}"),
         )
 
-        # Simpan ke riwayat unduhan
+        # Append entry to download history
         add_to_history(
             rjid=rj_id,
             title=title,

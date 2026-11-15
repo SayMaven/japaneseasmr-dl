@@ -26,7 +26,7 @@ from ui.theme import (
 
 
 def apply_dark_titlebar(window):
-    """Menerapkan Dark Titlebar pada Windows 10/11 agar titlebar jendela utama ikut berwarna gelap."""
+    """Apply modern dark titlebar styling on Windows 10/11 using DWM attributes."""
     if sys.platform != "win32":
         return
     try:
@@ -43,7 +43,7 @@ def apply_dark_titlebar(window):
 
 
 class InAppModal:
-    """Modal Dialog Modern berbasis CustomTkinter dengan elevasi card dan rounded corner."""
+    """Modern CustomTkinter-based in-app modal dialog with card elevation and rounded corners."""
     @staticmethod
     def show(parent, title, message, dialog_type="info", confirm_text="OK", cancel_text="Batal"):
         result = [False]
@@ -81,7 +81,7 @@ class InAppModal:
         }
         cfg = type_configs.get(dialog_type, type_configs["info"])
 
-        # Card Dialog Melayang di Tengah Jendela
+        # Centered floating dialog card
         card = ctk.CTkFrame(
             parent,
             corner_radius=RADIUS_LG,
@@ -94,7 +94,7 @@ class InAppModal:
         content = ctk.CTkFrame(card, fg_color="transparent")
         content.pack(padx=24, pady=20, fill="both", expand=True)
 
-        # Header (Badge + Judul)
+        # Header (Status Badge and Title)
         header = ctk.CTkFrame(content, fg_color="transparent")
         header.pack(fill="x", pady=(0, 12))
 

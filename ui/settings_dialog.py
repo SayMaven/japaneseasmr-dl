@@ -1,11 +1,11 @@
 """
-Modul kompatibilitas SettingsDialog untuk JapaneseASMR Downloader.
-Mengarahkan pemanggilan SettingsDialog ke Tab Pengaturan terintegrasi.
+SettingsDialog compatibility module for JapaneseASMR Downloader.
+Redirects external SettingsDialog calls to the integrated Settings tab.
 """
 from ui.tab_settings import SettingsTabMixin
 
 class SettingsDialog:
-    """Shim kompatibilitas: membuka tab pengaturan terintegrasi pada aplikasi utama."""
+    """Compatibility shim: navigates to the integrated settings tab in the main application."""
     def __init__(self, parent):
         self.parent = parent
         if hasattr(parent, "_select_page"):

@@ -75,13 +75,13 @@ ASMR_KEYWORDS = [
 
 def _is_asmr_audio(full_path, filename, root_dir, download_dir, hist_meta):
     r"""
-    Menentukan apakah suatu berkas audio merupakan karya ASMR / Voice Drama.
-    Menggunakan Smart Multi-Tier Heuristic:
-    1. Ada di riwayat unduhan aplikasi (load_history).
-    2. Nama file atau folder memuat ID DLsite (RJ/VJ/BJ\d{6,8}).
-    3. Nama file atau folder memuat kata kunci ASMR / Voice Drama (ASMR_KEYWORDS).
-    4. Folder memuat sidecar CUE sheet (.cue) atau metadata DLsite.
-    5. Tag internal audio (ID3/MP4/FLAC) memuat genre atau comment bertema ASMR.
+    Determine whether an audio file qualifies as an ASMR / Voice Drama release.
+    Employs a smart multi-tier heuristic:
+    1. Recorded in the application's download history (load_history).
+    2. Filename or subfolder contains a DLsite identifier (RJ/VJ/BJ\d{6,8}).
+    3. Filename or subfolder contains ASMR / Voice Drama thematic keywords.
+    4. Directory contains an accompanying sidecar CUE sheet (.cue).
+    5. Internal metadata tags (ID3/MP4/FLAC) contain ASMR-related genres or comments.
     """
     if hist_meta:
         return True
@@ -89,23 +89,23 @@ def _is_asmr_audio(full_path, filename, root_dir, download_dir, hist_meta):
     in_subfolder = os.path.abspath(root_dir) != os.path.abspath(download_dir)
     r_lower = os.path.basename(root_dir).lower() if in_subfolder else ""
 
-    # 1. Pola Kode RJ / VJ / BJ pada nama file atau nama folder subkarya
+    # 1. DLsite product code match (RJ / VJ / BJ) in filename or immediate subfolder
     if re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", filename, re.IGNORECASE) or (
         in_subfolder and re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", os.path.basename(root_dir), re.IGNORECASE)
     ):
         return True
 
-    # 2. Kata Kunci ASMR pada nama file atau nama folder subkarya
+    # 2. Thematic ASMR keywords in filename or immediate subfolder
     f_lower = filename.lower()
     if any(k in f_lower or (in_subfolder and k in r_lower) for k in ASMR_KEYWORDS):
         return True
 
-    # 3. Sidecar CUE sheet di folder yang sama
+    # 3. Accompanying CUE sheet sidecar in the same directory
     base_no_ext = os.path.splitext(full_path)[0]
     if os.path.exists(base_no_ext + ".cue"):
         return True
 
-    # 4. Tag metadata internal via mutagen (jika terpasang)
+    # 4. Audio container metadata tags inspection via mutagen (if installed)
     try:
         import mutagen
         audio = mutagen.File(full_path)
@@ -121,18 +121,18 @@ def _is_asmr_audio(full_path, filename, root_dir, download_dir, hist_meta):
 
 
 class PlayerTabMixin:
-    """Mixin untuk membangun antarmuka dan logika pemutar audio (Player Tab) v1.2.0."""
+    """Mixin providing interface construction and audio playback logic for the Player Tab."""
     def _build_player_tab(self):
         container = self.tab_player
 
-        # Layout 2 Kolom: Kiri (Playlist & Chapters), Kanan (Now Playing & Controls)
+        # Two-column layout: Left (Playlist & Chapters), Right (Now Playing & Controls)
         main_container = ctk.CTkFrame(container, fg_color="transparent")
         main_container.pack(fill="both", expand=True)
 
         left_p_panel = ctk.CTkFrame(main_container, fg_color="transparent")
         left_p_panel.pack(side="left", fill="both", expand=True, padx=(0, SPACE_MD))
 
-        # 1. Playlist Card (Mengisi Penuh Panel Kiri)
+        # 1. Playlist Card (occupies the left panel)
         playlist_card = ctk.CTkFrame(
             left_p_panel,
             corner_radius=RADIUS_CARD,
@@ -169,7 +169,7 @@ class PlayerTabMixin:
         )
         self.refresh_p_btn.pack(side="right")
 
-        # Treeview Playlist
+        # Playlist Treeview
         tree_p_container = ctk.CTkFrame(
             playlist_card,
             corner_radius=RADIUS_CARD,
@@ -199,7 +199,7 @@ class PlayerTabMixin:
         self.player_tree.bind("<Double-1>", lambda e: self._player_play_selected())
         self.player_tree.bind("<<TreeviewSelect>>", self._on_playlist_select)
 
-        # 2. Panel Kanan: Now Playing Screen, Controls, & Chapters
+        # 2. Right Panel: Now Playing Screen, Controls, & Chapters
         self.right_p_panel = ctk.CTkFrame(
             main_container,
             width=370,
@@ -223,7 +223,7 @@ class PlayerTabMixin:
         )
         self.lbl_now_playing_title.pack(side="left")
 
-        # Canvas Cover
+        # Cover Art Canvas
         self.player_canvas = tk.Canvas(
             self.right_p_panel,
             bg=SURFACE_INPUT,
@@ -262,7 +262,7 @@ class PlayerTabMixin:
         )
         self.lbl_p_track_sub.pack(fill="x", pady=(2, 0))
 
-        # Timeline Bar & Durasi
+        # Timeline Bar & Duration Labels
         timeline_frame = ctk.CTkFrame(self.right_p_panel, fg_color="transparent")
         timeline_frame.pack(fill="x", padx=SPACE_LG, pady=(6, 2))
 
@@ -412,7 +412,7 @@ class PlayerTabMixin:
         )
         self.lbl_vol_val.pack(side="right")
 
-        # 3. Chapters Card (Bab Audio) di bawah bar volume
+        # 3. Chapters Card below volume bar
         self.chap_frame = ctk.CTkFrame(
             self.right_p_panel,
             corner_radius=RADIUS_CARD,
@@ -495,8 +495,8 @@ class PlayerTabMixin:
 
     def _refresh_playlist_view(self):
         """
-        Memuat ulang daftar audio yang tersedia di riwayat serta memindai
-        seluruh isi folder penyimpanan unduhan secara rekursif (termasuk semua subfolder).
+        Reload the playlist from history and recursively scan the download directory
+        for verified ASMR audio tracks (including nested subfolders).
         """
         if hasattr(self, "_chapters_cache"):
             self._chapters_cache.clear()
@@ -516,7 +516,7 @@ class PlayerTabMixin:
             if out_p:
                 hist_by_path[os.path.normcase(os.path.abspath(out_p))] = h
 
-        # 1. Masukkan berkas dari riwayat yang berkas fisiknya masih ada di disk
+        # 1. Populate items from history whose physical files still exist on disk
         for h in histories:
             fpath = h.get("output_path", "")
             if fpath and os.path.exists(fpath):
@@ -540,13 +540,13 @@ class PlayerTabMixin:
                     }
                     self.playlist_items.append(item)
 
-        # 2. Pindai folder download secara rekursif untuk mendeteksi file audio
+        # 2. Recursively scan the download directory to detect audio files
         download_dir = os.path.abspath(get_download_dir())
         AUDIO_EXTS = {".mp3", ".wav", ".m4a", ".flac", ".aac", ".ogg", ".wma"}
 
         if os.path.exists(download_dir):
             for root, dirs, files in os.walk(download_dir, followlinks=False):
-                # Lewati direktori sistem / cache / temp / recycle bin
+                # Skip system, cache, temp, and recycle bin directories
                 dirs[:] = [
                     d for d in dirs
                     if not d.startswith(".")
@@ -554,7 +554,7 @@ class PlayerTabMixin:
                     and d.lower() not in {"$recycle.bin", "system volume information"}
                 ]
 
-                # Cari gambar cover lokal jika ada di subfolder yang sama
+                # Look for local cover art in the same folder if available
                 local_cover = None
                 img_candidates = [
                     f for f in files
@@ -577,7 +577,7 @@ class PlayerTabMixin:
                             continue
                         seen_paths.add(norm_p)
 
-                        # Deteksi ID RJ dari nama berkas atau nama subfolder
+                        # Detect RJ-ID from filename or parent folder
                         match = re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", f, re.IGNORECASE)
                         if not match:
                             match = re.search(r"(RJ\d{6,8}|VJ\d{6,8}|BJ\d{6,8})", os.path.basename(root), re.IGNORECASE)
@@ -585,11 +585,11 @@ class PlayerTabMixin:
                         rjid_detected = match.group(1).upper() if match else "-"
                         ref_meta = hist_by_path.get(norm_p) or (hist_by_rjid.get(rjid_detected) if rjid_detected != "-" else None)
 
-                        # Filter Cerdas: Hanya karya ASMR yang sah yang dimasukkan ke playlist!
+                        # Verification filter: Only verified ASMR tracks are added to playlist
                         if not _is_asmr_audio(full_path, f, root, download_dir, ref_meta):
                             continue
 
-                        # Hitung ukuran berkas
+                        # Compute formatted file size
                         try:
                             fsize = os.path.getsize(full_path)
                             if fsize >= 1024 * 1024 * 1024:
@@ -599,7 +599,7 @@ class PlayerTabMixin:
                         except OSError:
                             size_str = "-"
 
-                        # Judul karya
+                        # Resolve track title
                         base_name_no_ext = os.path.splitext(f)[0]
                         clean_name = re.sub(r"^\[(?:RJ|VJ|BJ)\d+\]\s*", "", base_name_no_ext).strip()
                         rel_sub = os.path.relpath(root, download_dir)
@@ -648,7 +648,7 @@ class PlayerTabMixin:
                         }
                         self.playlist_items.append(item)
 
-        # Masukkan seluruh item ke Treeview Playlist
+        # Populate all items into the playlist Treeview
         for idx, item in enumerate(self.playlist_items):
             self.player_tree.insert(
                 "",
@@ -705,11 +705,11 @@ class PlayerTabMixin:
         cover_cand = self.current_playing_meta.get("cover_url", "")
         self._render_player_cover(cover_cand)
 
-        # Hitung durasi audio akurat via FFmpeg
+        # Calculate precise audio duration via FFmpeg
         dur_ms = self._get_precise_duration_ms(file_path)
         self.player_duration_ms = dur_ms
 
-        # Evaluasi Engine Pemutar
+        # Evaluate playback engine
         file_ext = os.path.splitext(file_path)[1].lower()
         use_mf = False
         if sys.platform == "win32" and file_ext in [".m4a", ".aac", ".mp3", ".wav"]:
@@ -731,7 +731,7 @@ class PlayerTabMixin:
             self._player_schedule_tick()
             return
 
-        # Fallback ke Windows MCI
+        # Fallback to Windows MCI
         short_name = "asmr_player"
         self._mci_send(f"close {short_name}")
         err, _ = self._mci_send(f'open "{file_path}" type mpegvideo alias {short_name}')
@@ -739,7 +739,7 @@ class PlayerTabMixin:
             err, _ = self._mci_send(f'open "{file_path}" alias {short_name}')
 
         if err != 0:
-            show_dark_error(self, "Error Pemutar", f"Format audio tidak didukung oleh Windows Media Player MCI. (Error code: {err})")
+            show_dark_error(self, "Audio Error", f"Audio format not supported by Windows Media Player MCI. (Error code: {err})")
             return
 
         self._mci_send(f"set {short_name} time format milliseconds")
@@ -759,11 +759,11 @@ class PlayerTabMixin:
         self.btn_play_pause.configure(image=get_icon("pause", size=(22, 22)), text="")
         self.lbl_time_total.configure(text=self._format_time(self.player_duration_ms))
 
-        # Set Volume MCI Awal
+        # Initial MCI volume configuration
         cur_vol = int(self.vol_slider.get())
         self._player_set_volume(cur_vol)
 
-        # Muat daftar bab
+        # Load chapter list
         self._load_track_chapters(file_path, rjid=rjid)
         self._player_schedule_tick()
 
@@ -782,7 +782,7 @@ class PlayerTabMixin:
                 pass
 
         if cover_cand:
-            # 1. Cek apakah cover_cand adalah berkas lokal di disk
+            # 1. Check if cover_cand is a local file on disk
             if os.path.isfile(cover_cand):
                 try:
                     pil_img = Image.open(cover_cand)
@@ -794,7 +794,7 @@ class PlayerTabMixin:
                 except Exception:
                     pass
 
-            # 2. Jika merupakan URL web (HTTP/HTTPS)
+            # 2. Remote URL fallback (HTTP/HTTPS)
             def _apply_player_cover(p_img):
                 try:
                     if hasattr(self, "player_canvas") and self.player_canvas.winfo_exists():

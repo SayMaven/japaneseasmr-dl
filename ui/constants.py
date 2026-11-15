@@ -6,7 +6,7 @@ USER_AGENT = (
     "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
 )
 
-# Regex Progress Parsing untuk yt-dlp & aria2c
+# Regex progress parsing patterns for yt-dlp and aria2c output
 RE_YTDLP_PROGRESS = re.compile(
     r'\[download\]\s+([\d\.]+)%\s+of\s+~?\s*([\d\.]+[kMGTP]?i?B)(?:\s+at\s+([\d\.]+[kMGTP]?i?B/s))?(?:\s+ETA\s+([\d:]+))?(?:\s*\(frag\s+(\d+)/(\d+)\))?',
     re.IGNORECASE,
